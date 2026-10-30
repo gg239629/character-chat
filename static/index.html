@@ -226,7 +226,7 @@ function msgNode(who, text, isMe, streaming){
   wrap.className = "msg" + (isMe ? " me" : "");
 
   const av = document.createElement("div");
-  const meta = isMe ? { cls: "me", label: "你" } : (META[who] || META["小婉"]);
+  const meta = isMe ? { cls: "me", label: "你" } : (META[who] || { cls: "", label: "角" });
   av.className = "avatar " + meta.cls;
   av.textContent = meta.label;
 
@@ -260,7 +260,7 @@ function segments(text){
       const cur = out[out.length - 1];
       cur.text += (cur.text ? "\n" : "") + line;
     } else {
-      out.push({ who: NAMES[0], text: line });
+      out.push({ who: "角色", text: line });
     }
   }
   return out.map(s => ({ who: s.who, text: s.text.replace(/\n{3,}/g, "\n\n").trim() }))
@@ -271,7 +271,7 @@ function renderGroup(group, text, streaming){
   group.innerHTML = "";
   const segs = segments(text);
   if (!segs.length){
-    group.appendChild(msgNode(NAMES[0], "", false, true));
+    group.appendChild(msgNode("角色", "", false, true));
     return;
   }
   segs.forEach((s, i) => {
@@ -501,7 +501,7 @@ async function openSettings(){
   dlg.showModal();
 }
 
-async function saveSettings(){
+function settingsDraft(){
   const tokenRaw = sTokens.value.trim();
   const body = {
     base_url: sBase.value.trim(),
@@ -510,6 +510,11 @@ async function saveSettings(){
     max_tokens: tokenRaw === "" ? 0 : Number(tokenRaw),
   };
   if (sKey.value.trim()) body.api_key = sKey.value.trim();
+  return body;
+}
+
+async function saveSettings(){
+  const body = settingsDraft();
   try{
     const r = await fetch("/api/settings", {
       method: "POST",
@@ -517,7 +522,12 @@ async function saveSettings(){
       body: JSON.stringify(body)
     });
     const d = await r.json();
-    if (d.error){ dlgStatus("保存失败：" + d.error, "err"); return; }
+    if (!r.ok || d.error){ dlgStatus("保存失败：" + (d.error || JSON.stringify(d.detail)), "err"); return; }
+    const eff = d.effective || {};
+    sKeyHint.textContent = d.api_key_masked ? "当前：" + d.api_key_masked : "当前：未设置";
+    sEff.textContent = "实际生效\nmodel：" + (eff.model || "未设置") +
+      "\nbase_url：" + (eff.base_url || "未设置") + "\nkey：" + (eff.has_key ? "已读到" : "没有");
+    sKey.value = "";
     dlgStatus("已保存 · 现在是 " + (d.effective && d.effective.model ? d.effective.model : d.model), "ok");
     toast("设置已保存，下一句就按新模型走", "ok");
     refreshModel();
@@ -533,9 +543,13 @@ function dlgStatus(msg, kind){
 async function testModel(){
   const btn = document.getElementById("sTest");
   btn.disabled = true;
-  dlgStatus("正在测试连接…", "wait");
+  dlgStatus("正在测试输入框中的配置（尚未保存）…", "wait");
   try{
-    const r = await fetch("/api/test", { method: "POST" });
+    const r = await fetch("/api/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsDraft())
+    });
     const d = await r.json();
     if (d.error){
       dlgStatus("连不上：\n" + d.error, "err");

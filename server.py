@@ -33,6 +33,7 @@ MEMORY_MD = MEMORY_DIR / "陪伴角色.md"
 MEMORY_JSON = MEMORY_DIR / "记忆包.json"
 
 MAIN_CHAR = "小婉"
+from role_routing import select_speaker
 
 app = FastAPI(title="陪伴角色 · 网页版")
 
@@ -242,9 +243,14 @@ def set_settings(body: SettingsIn):
 
 
 @app.post("/api/test")
-async def test_model():
-    """用当前配置发一句话，验证能不能通。连接抖一下会重试一次。"""
-    cfg = load_config()
+async def test_model(body: SettingsIn | None = None):
+    """Test draft settings without saving them; blank keys reuse the saved key."""
+    cfg = dict(load_config())
+    if body is not None:
+        for key in ("model", "base_url", "api_key"):
+            value = getattr(body, key)
+            if value is not None and (key != "api_key" or value.strip()):
+                cfg[key] = value.strip()
     problem = check_cfg(cfg)
     if problem:
         return JSONResponse({"error": problem}, 400)
@@ -344,8 +350,14 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     payload = [{"role": "system", "content": stable}]
     if dynamic:
         payload.append({"role": "system", "content": dynamic})
-    payload += build_fewshot()
-    payload += STYLE_FEWSHOT
+    memory_messages = build_fewshot()
+    payload += memory_messages
+    speaker = select_speaker(messages, memory_messages)
+    if speaker:
+        payload.append({"role": "system", "content": (
+            f"本轮主要回复角色：{speaker}。第一条台词以「{speaker}：」开头。"
+            "保持当前对话连续性；其他角色仅在必要时补充，不因默认主视角切换角色。"
+        )})
     payload += [
         {"role": m["role"], "content": m["content"]}
         for m in messages[-HISTORY_LIMIT:]

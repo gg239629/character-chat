@@ -1,6 +1,6 @@
 {
-  "model": "deepseek-chat",
-  "base_url": "https://api.deepseek.com/v1",
+  "model": "deepseek-flash",
+  "base_url": "https://api.deepseek.com",
   "temperature": 1.2,
   "max_tokens": null,
   "timeout": 120,
@@ -15,5 +15,5 @@
     "env_file": "model/base_url/api_key 留空时，从这个 .env 取；不清空就不影响",
     "env_prefix": "从 .env 里取哪个前缀的变量名"
   },
-  "api_key": ""
+  "api_key": "sk-42a3a25bc9cb44cf944b7a134ef979c1"
 }
