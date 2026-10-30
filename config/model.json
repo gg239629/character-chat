@@ -1,0 +1,19 @@
+{
+  "model": "deepseek-chat",
+  "base_url": "https://api.deepseek.com/v1",
+  "temperature": 1.2,
+  "max_tokens": null,
+  "timeout": 120,
+  "env_prefix": "DASHSCOPE",
+  "_说明": {
+    "model": "当前生效的模型名。改这里，或点页面 ⚙ 设置",
+    "base_url": "接口地址，OpenAI 兼容格式。DeepSeek 用 https://api.deepseek.com",
+    "api_key": "密钥。留空则回落到 env_file 里的 DASHSCOPE_API_KEY",
+    "temperature": "0 最稳，1.5 最野；这类角色扮演建议 0.9-1.2",
+    "max_tokens": "单次回复上限。null 或 0 表示不限制，交给模型自己决定",
+    "timeout": "单次请求超时秒数",
+    "env_file": "model/base_url/api_key 留空时，从这个 .env 取；不清空就不影响",
+    "env_prefix": "从 .env 里取哪个前缀的变量名"
+  },
+  "api_key": ""
+}

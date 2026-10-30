@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>陪伴角色 · 网页版</title>
+<style>
+  :root{
+    --bg:#101116; --panel:#181a22; --line:#272b38; --text:#e9e9f0; --dim:#868aa0;
+    --me:#3a6df0;
+    --wan1:#f2a0b6; --wan2:#c25d7f;
+    --yan1:#f6c9a0; --yan2:#c98a52;
+    --liu1:#a9b8d6; --liu2:#5f6f9a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    display:flex; flex-direction:column; height:100dvh;
+  }
+
+  header{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line);
+    flex:0 0 auto;
+  }
+  header button{
+    background:#232735;border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;
+  }
+  header button:hover{background:#2b3040}
+  header #save{margin-left:auto}
+
+  #chat{flex:1 1 auto; overflow-y:auto; padding:18px 14px 8px}
+  .group{margin:0 0 16px}
+  .msg{display:flex; gap:10px; margin:0 0 10px; align-items:flex-start}
+  .msg.me{flex-direction:row-reverse}
+  .avatar{
+    width:38px;height:38px;border-radius:50%;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:600;color:#16181f;
+    box-shadow:0 0 0 1px rgba(255,255,255,.08);
+    user-select:none;
+  }
+  .avatar.wan{background:linear-gradient(140deg,var(--wan1),var(--wan2))}
+  .avatar.yan{background:linear-gradient(140deg,var(--yan1),var(--yan2))}
+  .avatar.liu{background:linear-gradient(140deg,var(--liu1),var(--liu2))}
+  .avatar.me{background:#2f3444;color:#cfd4e6}
+  .body{max-width:min(700px,80%); display:flex; flex-direction:column}
+  .msg.me .body{align-items:flex-end}
+  .name{font-size:11px;color:var(--dim);margin:0 0 3px 4px;letter-spacing:.5px}
+  .bubble{
+    padding:10px 14px; border-radius:14px; white-space:pre-wrap; word-break:break-word;
+    background:#22252f; border-top-left-radius:4px;
+  }
+  .msg.me .bubble{background:var(--me); border-top-left-radius:14px; border-top-right-radius:4px}
+  .bubble.err{background:#3a1f26;color:#ff9db0;border:1px solid #6b2b3a}
+  .cursor::after{content:"▍";color:var(--dim);animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  #composer{flex:0 0 auto; padding:10px 14px 14px; background:var(--panel); border-top:1px solid var(--line)}
+  #composer .box{display:flex; gap:8px; align-items:flex-end}
+  textarea{
+    flex:1; resize:none; min-height:46px; max-height:180px;
+    background:#0e0f15; color:var(--text); border:1px solid var(--line);
+    border-radius:12px; padding:12px 14px; font:inherit; outline:none;
+  }
+  textarea:focus{border-color:#3a4a7a}
+  #send{
+    background:var(--me); color:#fff; border:0; border-radius:12px;
+    padding:12px 20px; font-size:15px; cursor:pointer; min-width:76px;
+  }
+  #send:disabled{opacity:.5;cursor:default}
+  #describe{
+    background:#2b3040; color:#cfd6ea; border:1px solid var(--line);
+    border-radius:12px; padding:12px 14px; font-size:14px; cursor:pointer;
+  }
+  #describe:hover{background:#343a4d}
+  #describe:disabled{opacity:.5;cursor:default}
+  #suggest{display:flex; flex-direction:column; gap:6px; margin:0 0 8px}
+  #suggest:empty{display:none}
+  .chip{
+    text-align:left; background:#1e212b; border:1px solid #313749; color:#c9d0e4;
+    border-radius:10px; padding:8px 12px; font:inherit; font-size:13px; line-height:1.6;
+    cursor:pointer;
+  }
+  .chip:hover{background:#262b38; border-color:#44506e}
+  .chip .tag{color:var(--dim); margin-right:6px; font-size:12px}
+
+  #toast{
+    position:fixed; left:50%; bottom:96px; transform:translate(-50%, 12px);
+    max-width:min(560px,88vw); padding:10px 16px; border-radius:10px;
+    font-size:13px; line-height:1.5; white-space:pre-wrap;
+    background:#232734; color:#dfe3f0; border:1px solid #333a4d;
+    opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+    z-index:50;
+  }
+  #toast.show{opacity:1; transform:translate(-50%, 0)}
+  #toast.ok{background:#1d3a2a; border-color:#2f6b4a; color:#a8ecc4}
+  #toast.warn{background:#3a3520; border-color:#6b5c2b; color:#f0dfa8}
+  #toast.error{background:#3a1f26; border-color:#6b2b3a; color:#ffb0be}
+  .hint{color:var(--dim);font-size:11px;margin-top:6px;display:flex;gap:12px}
+
+  #settingsDlg{
+    border:1px solid #333a4d; border-radius:14px; padding:20px 22px;
+    background:#181a22; color:var(--text); width:min(520px,92vw);
+  }
+  #settingsDlg::backdrop{background:rgba(0,0,0,.55)}
+  #settingsDlg h2{margin:0 0 14px; font-size:16px; font-weight:600}
+  #settingsDlg .field{display:flex; flex-direction:column; gap:5px; margin:0 0 12px}
+  #settingsDlg label{font-size:12px; color:var(--dim)}
+  #settingsDlg input{
+    background:#0e0f15; color:var(--text); border:1px solid var(--line);
+    border-radius:9px; padding:9px 11px; font:inherit; font-size:13px; outline:none;
+  }
+  #settingsDlg input:focus{border-color:#3a4a7a}
+  #settingsDlg .row2{display:flex; gap:12px}
+  #settingsDlg .row2 .field{flex:1}
+  #settingsDlg .eff{font-size:11px; color:var(--dim); line-height:1.6; margin:0 0 14px; white-space:pre-wrap}
+  #settingsDlg .dlgFoot{display:flex; gap:8px; justify-content:flex-end}
+  #settingsDlg .ghost{background:#232735;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer}
+  #settingsDlg .primary{background:var(--me);border:0;color:#fff;border-radius:9px;padding:8px 18px;font-size:13px;cursor:pointer}
+  #settingsDlg .ghost:hover{background:#2b3040}
+  .hintInline{color:#6b7286; margin-left:6px}
+  #settingsDlg .status{font-size:12px; line-height:1.6; white-space:pre-wrap; margin:0 0 12px; min-height:0}
+  #settingsDlg .status.ok{color:#a8ecc4}
+  #settingsDlg .status.err{color:#ffb0be}
+  #settingsDlg .status.wait{color:#c9b98a}
+  .modelChip{
+    font-size:12px; color:#9fb0d8; background:#1b1f2b; border:1px solid #2b3242;
+    padding:3px 9px; border-radius:999px; white-space:nowrap; max-width:260px;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  .modelChip.live{color:#a8ecc4; border-color:#2f6b4a}
+</style>
+</head>
+<body>
+<header>
+  <button id="settingsBtn" title="设置模型">⚙ 设置</button>
+  <span id="modelChip" class="modelChip" title="当前生效模型">—</span>
+  <button id="save" style="margin-left:auto;border-color:#2f6b4a;color:#8fe0b0" title="把当前对话写进记忆包">保存</button>
+  <button id="clear" style="border-color:#6b2b3a;color:#ffb0be" title="清空当前对话（不动记忆包）">清除</button>
+</header>
+
+<dialog id="settingsDlg">
+  <h2>模型设置</h2>
+  <div class="field">
+    <label>接口地址 base_url</label>
+    <input id="sBase" placeholder="https://api.openai.com/v1 ／ http://127.0.0.1:11434/v1" />
+  </div>
+  <div class="field">
+    <label>模型名 model</label>
+    <input id="sModel" placeholder="deepseek-chat ／ qwen2.5:14b ／ gpt-4o-mini" />
+  </div>
+  <div class="field">
+    <label>API Key<span id="sKeyHint" class="hintInline"></span></label>
+    <input id="sKey" type="password" placeholder="留空表示不修改" autocomplete="off" />
+  </div>
+  <div class="row2">
+    <div class="field">
+      <label>temperature</label>
+      <input id="sTemp" type="number" step="0.1" min="0" max="2" />
+    </div>
+    <div class="field">
+      <label>max_tokens（留空=不限）</label>
+      <input id="sTokens" type="number" step="50" min="0" placeholder="留空或 0 = 不限制" />
+    </div>
+  </div>
+  <div class="eff" id="sEff"></div>
+  <div class="status" id="sStatus"></div>
+  <div class="dlgFoot">
+    <button id="sTest" class="ghost">测试连接</button>
+    <button id="sSave" class="primary">保存</button>
+    <button id="sClose" class="ghost">关闭</button>
+  </div>
+</dialog>
+
+<div id="chat"></div>
+<div id="toast"></div>
+
+<div id="composer">
+  <div id="suggest"></div>
+  <div class="box">
+    <textarea id="input" rows="1" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+    <button id="describe" title="帮你想接下来做什么，给三条可直接发送的描述">描述</button>
+    <button id="send">发送</button>
+  </div>
+  <div class="hint">
+    <span>对话存在本机浏览器里，刷新不丢</span>
+    <span id="status"></span>
+  </div>
+</div>
+
+<script>
+const STORE_KEY = "companion-chat-v1";
+const SAVED_KEY = "companion-chat-saved";
+const NAMES = ["小婉", "小研", "小柳"];
+const META = {
+  "小婉": { cls: "wan", label: "婉" },
+  "小研": { cls: "yan", label: "研" },
+  "小柳": { cls: "liu", label: "柳" },
+};
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendEl = document.getElementById("send");
+const statusEl = document.getElementById("status");
+
+let history = [];
+let savedCount = 0;
+let busy = false;
+
+function load(){
+  try{ history = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }catch{ history = []; }
+  savedCount = Math.min(parseInt(localStorage.getItem(SAVED_KEY) || "0", 10) || 0, history.length);
+}
+function persist(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(history.slice(-80)));
+}
+
+/* ---------- 渲染 ---------- */
+
+function msgNode(who, text, isMe, streaming){
+  const wrap = document.createElement("div");
+  wrap.className = "msg" + (isMe ? " me" : "");
+
+  const av = document.createElement("div");
+  const meta = isMe ? { cls: "me", label: "你" } : (META[who] || META["小婉"]);
+  av.className = "avatar " + meta.cls;
+  av.textContent = meta.label;
+
+  const body = document.createElement("div");
+  body.className = "body";
+
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = isMe ? "你" : who;
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble" + (streaming ? " cursor" : "");
+  bubble.textContent = text;
+
+  body.appendChild(name);
+  body.appendChild(bubble);
+  wrap.appendChild(av);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+/** 把「小婉：…」这种带说话人的文本切成一段段 */
+function segments(text){
+  const out = [];
+  const lines = String(text).split("\n");
+  for (const line of lines){
+    const m = line.match(/^\s*(小婉|小研|小柳)\s*[：:]\s*(.*)$/);
+    if (m){
+      out.push({ who: m[1], text: m[2] });
+    } else if (out.length){
+      const cur = out[out.length - 1];
+      cur.text += (cur.text ? "\n" : "") + line;
+    } else {
+      out.push({ who: NAMES[0], text: line });
+    }
+  }
+  return out.map(s => ({ who: s.who, text: s.text.replace(/\n{3,}/g, "\n\n").trim() }))
+            .filter(s => s.text.length && s.text !== s.who);
+}
+
+function renderGroup(group, text, streaming){
+  group.innerHTML = "";
+  const segs = segments(text);
+  if (!segs.length){
+    group.appendChild(msgNode(NAMES[0], "", false, true));
+    return;
+  }
+  segs.forEach((s, i) => {
+    const last = i === segs.length - 1;
+    group.appendChild(msgNode(s.who, s.text, false, streaming && last));
+  });
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function render(){
+  chatEl.innerHTML = "";
+  for (const m of history){
+    if (m.role === "user"){
+      chatEl.appendChild(msgNode("", m.content, true, false));
+    } else {
+      const g = document.createElement("div");
+      g.className = "group";
+      renderGroup(g, m.content, false);
+      chatEl.appendChild(g);
+    }
+  }
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+/* ---------- 发送（流式） ---------- */
+
+async function send(){
+  const text = inputEl.value.trim();
+  if (!text || busy) return;
+  busy = true; sendEl.disabled = true; describeEl.disabled = true;
+  clearSuggest();
+  inputEl.value = ""; inputEl.style.height = "auto";
+
+  history.push({ role: "user", content: text });
+  chatEl.appendChild(msgNode("", text, true, false));
+
+  const group = document.createElement("div");
+  group.className = "group";
+  chatEl.appendChild(group);
+  renderGroup(group, "", true);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  let acc = "";
+  try{
+    const res = await fetch("/api/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history })
+    });
+    if (!res.ok){
+      const d = await res.json().catch(() => ({ error: "HTTP " + res.status }));
+      group.innerHTML = "";
+      group.appendChild(msgNode("", "出错：" + (d.error || "未知错误"), false, false))
+           .querySelector(".bubble")?.classList.add("err");
+      group.querySelector(".bubble")?.classList.add("err");
+      statusEl.textContent = "请求失败";
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+
+    while (true){
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0){
+        const raw = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 2);
+        if (!raw.startsWith("data:")) continue;
+        let evt;
+        try{ evt = JSON.parse(raw.slice(5).trim()); }catch{ continue; }
+
+        if (evt.delta){ acc += evt.delta; renderGroup(group, acc, true); }
+        else if (evt.retry){ acc = ""; renderGroup(group, "", true); statusEl.textContent = "连接断了，正在重试…"; }
+        else if (evt.reset){ acc = ""; renderGroup(group, "", true); }
+        else if (evt.error){
+          group.innerHTML = "";
+          const n = msgNode("", "出错：" + evt.error, false, false);
+          n.querySelector(".bubble").classList.add("err");
+          group.appendChild(n);
+          statusEl.textContent = "请求失败";
+        }
+      }
+    }
+
+    acc = acc.trim();
+    if (acc){
+      history.push({ role: "assistant", content: acc });
+      renderGroup(group, acc, false);
+    } else {
+      const n = msgNode("", "（这次没返回内容，再发一次试试）", false, false);
+      n.querySelector(".bubble").classList.add("err");
+      group.appendChild(n);
+    }
+    persist();
+  }catch(err){
+    group.innerHTML = "";
+    const n = msgNode("", "网络错误：" + err.message, false, false);
+    n.querySelector(".bubble").classList.add("err");
+    group.appendChild(n);
+  }finally{
+    busy = false; sendEl.disabled = false; describeEl.disabled = false;
+    inputEl.focus();
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+}
+
+/* ---------- 描述：帮用户想下一步 ---------- */
+
+const suggestEl = document.getElementById("suggest");
+const describeEl = document.getElementById("describe");
+
+function clearSuggest(){ suggestEl.innerHTML = ""; }
+
+async function describe(){
+  if (busy) return;
+  if (!history.length){ statusEl.textContent = "先说句话再点描述"; return; }
+  describeEl.disabled = true;
+  statusEl.textContent = "在想接下来能做什么…";
+  try{
+    const res = await fetch("/api/describe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: history })
+    });
+    const d = await res.json();
+    if (d.error){ statusEl.textContent = "失败：" + d.error; return; }
+    clearSuggest();
+    const opts = d.options || [];
+    if (!opts.length){ statusEl.textContent = "没想出来，再点一次"; return; }
+    opts.forEach((text, i) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = String(i + 1);
+      b.appendChild(tag);
+      b.appendChild(document.createTextNode(text));
+      b.addEventListener("click", ()=>{
+        inputEl.value = text;
+        inputEl.focus();
+        inputEl.style.height = "auto";
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 180) + "px";
+        clearSuggest();
+        statusEl.textContent = "已填进输入框，可以改了再发";
+      });
+      suggestEl.appendChild(b);
+    });
+    statusEl.textContent = "选一条，点一下填进输入框";
+  }catch(e){
+    statusEl.textContent = "出错：" + e.message;
+  }finally{
+    describeEl.disabled = false;
+  }
+}
+
+describeEl.addEventListener("click", describe);
+
+sendEl.addEventListener("click", send);
+inputEl.addEventListener("keydown", e=>{
+  if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); send(); }
+});
+inputEl.addEventListener("input", ()=>{
+  inputEl.style.height = "auto";
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 180) + "px";
+});
+
+
+/* ---------- 当前生效模型 ---------- */
+
+const modelChip = document.getElementById("modelChip");
+let modelTimer = null;
+
+async function refreshModel(){
+  try{
+    const r = await fetch("/api/info");
+    const d = await r.json();
+    const name = d.model || "未配置";
+    modelChip.textContent = name;
+    modelChip.classList.toggle("live", !!d.has_key && name !== "(未配置)");
+    modelChip.title = "当前生效模型：" + name + (d.has_key ? "" : "（没有读到 api_key）");
+  }catch(e){
+    modelChip.textContent = "离线";
+    modelChip.classList.remove("live");
+  }
+}
+
+refreshModel();
+modelTimer = setInterval(refreshModel, 15000);
+document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) refreshModel(); });
+
+/* ---------- 设置 ---------- */
+
+const dlg = document.getElementById("settingsDlg");
+const sBase = document.getElementById("sBase");
+const sModel = document.getElementById("sModel");
+const sKey = document.getElementById("sKey");
+const sTemp = document.getElementById("sTemp");
+const sTokens = document.getElementById("sTokens");
+const sEff = document.getElementById("sEff");
+const sKeyHint = document.getElementById("sKeyHint");
+
+async function openSettings(){
+  try{
+    const r = await fetch("/api/settings");
+    const d = await r.json();
+    sBase.value = d.base_url || "";
+    sModel.value = d.model || "";
+    sKey.value = "";
+    sTemp.value = d.temperature ?? 1.0;
+    sTokens.value = (d.max_tokens === null || d.max_tokens === undefined) ? "" : d.max_tokens;
+    sKeyHint.textContent = d.api_key_masked ? "当前：" + d.api_key_masked : "当前：未设置";
+    const eff = d.effective || {};
+    sEff.textContent =
+      "实际生效\n" +
+      "model：" + (eff.model || "（空，将用 .env）") + "\n" +
+      "base_url：" + (eff.base_url || "（空，将用 .env）") + "\n" +
+      "key：" + (eff.has_key ? "已读到" : "没有");
+  }catch(e){
+    sEff.textContent = "读不到配置：" + e.message;
+  }
+  dlgStatus("", "");
+  dlg.showModal();
+}
+
+async function saveSettings(){
+  const tokenRaw = sTokens.value.trim();
+  const body = {
+    base_url: sBase.value.trim(),
+    model: sModel.value.trim(),
+    temperature: Number(sTemp.value),
+    max_tokens: tokenRaw === "" ? 0 : Number(tokenRaw),
+  };
+  if (sKey.value.trim()) body.api_key = sKey.value.trim();
+  try{
+    const r = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.error){ dlgStatus("保存失败：" + d.error, "err"); return; }
+    dlgStatus("已保存 · 现在是 " + (d.effective && d.effective.model ? d.effective.model : d.model), "ok");
+    toast("设置已保存，下一句就按新模型走", "ok");
+    refreshModel();
+  }catch(e){ toast("保存出错：" + e.message, "error"); }
+}
+
+function dlgStatus(msg, kind){
+  const el = document.getElementById("sStatus");
+  el.className = "status " + (kind || "");
+  el.textContent = msg;
+}
+
+async function testModel(){
+  const btn = document.getElementById("sTest");
+  btn.disabled = true;
+  dlgStatus("正在测试连接…", "wait");
+  try{
+    const r = await fetch("/api/test", { method: "POST" });
+    const d = await r.json();
+    if (d.error){
+      dlgStatus("连不上：\n" + d.error, "err");
+      return;
+    }
+    dlgStatus("连接正常 · " + d.model + "\n回：" + (d.reply || "（空）"), "ok");
+  }catch(e){
+    dlgStatus("测试出错：" + e.message, "err");
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("settingsBtn").addEventListener("click", openSettings);
+document.getElementById("sSave").addEventListener("click", saveSettings);
+document.getElementById("sTest").addEventListener("click", testModel);
+document.getElementById("sClose").addEventListener("click", ()=> dlg.close());
+
+/* ---------- 保存到记忆包 ---------- */
+
+const saveEl = document.getElementById("save");
+
+saveEl.addEventListener("click", async ()=>{
+  if (saveEl.disabled) return;
+  const fresh = history.slice(savedCount);
+  if (!fresh.length){
+    toast("没有新内容要保存（清除后或已存过）", "warn");
+    return;
+  }
+
+  saveEl.disabled = true;
+  const oldText = saveEl.textContent;
+  saveEl.textContent = "保存中…";
+  toast("正在写进记忆包…", "info");
+
+  try{
+    const res = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: fresh })
+    });
+    const d = await res.json();
+
+    if (d.error){
+      toast("保存失败：" + d.error, "error");
+      saveEl.textContent = "保存失败";
+      setTimeout(()=>{ saveEl.textContent = oldText; saveEl.disabled = false; }, 1800);
+      return;
+    }
+
+    savedCount = history.length;
+    localStorage.setItem(SAVED_KEY, String(savedCount));
+    saveEl.textContent = "已保存 ✓";
+    toast(`已保存 ${d.saved} 条`, "ok");
+    setTimeout(()=>{ saveEl.textContent = oldText; saveEl.disabled = false; }, 1600);
+  }catch(e){
+    toast("保存出错：" + e.message, "error");
+    saveEl.textContent = "保存出错";
+    setTimeout(()=>{ saveEl.textContent = oldText; saveEl.disabled = false; }, 1800);
+  }
+});
+
+/* ---------- 提示条 ---------- */
+
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+
+function toast(msg, type){
+  toastEl.textContent = msg;
+  toastEl.className = "show " + (type || "info");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ toastEl.className = ""; }, type === "error" ? 4600 : 2600);
+}
+
+/* ---------- 清除 ---------- */
+
+document.getElementById("clear").addEventListener("click", ()=>{
+  if (!confirm("清除当前对话？记忆包里已经保存的内容不受影响。")) return;
+  history = []; savedCount = 0;
+  localStorage.removeItem(STORE_KEY);
+  localStorage.setItem(SAVED_KEY, "0");
+  render();
+  statusEl.textContent = "";
+  toast("当前对话已清除，记忆包没动", "warn");
+});
+
+load(); render();
+inputEl.focus();
+</script>
+</body>
+</html>

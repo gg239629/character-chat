@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: private-character-chat
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_PASSWORD
+        generateValue: true
+      - key: APP_USERNAME
+        value: owner
+      - key: MODEL_API_KEY
+        sync: false
+      - key: MODEL_BASE_URL
+        sync: false
+      - key: MODEL_MODEL
+        sync: false
