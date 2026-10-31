@@ -33,7 +33,7 @@ MEMORY_MD = MEMORY_DIR / "陪伴角色.md"
 MEMORY_JSON = MEMORY_DIR / "记忆包.json"
 
 MAIN_CHAR = "小婉"
-from role_routing import select_speaker, recent_rounds
+from role_routing import select_speaker, recent_rounds, merge_recent_history
 import long_memory
 import storage
 from fastapi import Request
@@ -180,7 +180,7 @@ def build_system_prompt() -> str:
     return (s + "\n\n" + d).strip() if d else s
 
 
-def build_fewshot(limit: int = 8) -> list[dict[str, str]]:
+def build_fewshot(limit: int = 10) -> list[dict[str, str]]:
     """把记忆包里的最近对话转成 few-shot，语气照这个来。"""
     try:
         pack = storage.memory_pack()
@@ -380,7 +380,7 @@ def looks_intimate(messages: list[dict[str, str]]) -> bool:
     return hits >= 3
 
 
-HISTORY_LIMIT = 16   # 最近 16 轮；当前尚未回复的用户消息计为一轮
+HISTORY_LIMIT = 10   # 数据库与浏览器合并后的最新10轮，包含当前用户消息
 
 
 def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -388,13 +388,13 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     payload = [{"role": "system", "content": stable}]
     if dynamic:
         payload.append({"role": "system", "content": dynamic})
-    memory_messages = build_fewshot()
+    memory_messages = build_fewshot(HISTORY_LIMIT)
+    history = merge_recent_history(memory_messages, messages, HISTORY_LIMIT)
     query = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
-    reference = long_memory.context(query, [m.get("content", "") for m in memory_messages + recent_rounds(messages, HISTORY_LIMIT)])
+    reference = long_memory.context(query, [m.get("content", "") for m in history])
     if reference:
         payload.append({"role": "system", "content": reference})
-    payload += memory_messages
-    speaker = select_speaker(messages, memory_messages)
+    speaker = select_speaker(history, [])
     if speaker:
         payload.append({"role": "system", "content": (
             f"本轮主要回复角色：{speaker}。第一条台词以「{speaker}：」开头。"
@@ -402,7 +402,7 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
         )})
     payload += [
         {"role": m["role"], "content": m["content"]}
-        for m in recent_rounds(messages, HISTORY_LIMIT)
+        for m in history
         if m.get("content")
     ]
     if looks_intimate(messages):

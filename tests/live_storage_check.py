@@ -25,26 +25,34 @@ async def main():
                 storage.append_log([{"who": "他", "text": "我们约好周日上午去植物园看兰花。"}, {"who": "小研", "text": "周日上午去植物园，这个约定还没有完成。"}])
                 # Leave older originals in the archive, with the recent window empty,
                 # so the answer must use retrieved historical evidence.
-                storage.write_document("recent_log", [])
+                # Keep the saved fact in recent storage; query through recent-first recall.
                 reply = await server.chat(server.ChatIn(messages=[{"role": "user", "content": "我们约好周日去哪里看兰花？"}]))
                 assert isinstance(reply, dict), "Model call failed"
                 assert "植物园" in reply["reply"], "Historical fact not recalled"
                 assert reply["reply"].startswith("小研"), "Speaker mismatch"
                 scene = storage.memory_pack()["scene_state"]
                 assert scene, "Real scene update did not persist"
-                print("PASS: real model retrieved archived fact; selected Xiaoyan; scene persisted to database.")
+                print("PASS: real model retrieved recent fact; selected Xiaoyan; scene persisted to database.")
                 # Real incremental summarization against a separate temporary conversation.
                 store.ensure("owner", "summary-test")
                 token = storage.scope.set(("owner", "summary-test"))
                 try:
-                    storage.append_log([{"who":"他", "text": str(i)+"用户不吃花生。约好周日上午去植物园看兰花，尚未完成。"*15} for i in range(60)])
+                    storage.append_log([{"who":"他", "text": str(i)+"用户不吃花生。约好周日上午去植物园看兰花，尚未完成。"*15} for i in range(260)])
                     await asyncio.to_thread(long_memory.refresh_summary, cfg)
-                    summary = storage.read_document("summary.json", {})
-                    assert summary.get("cursor", 0)>0 and "花生" in summary.get("text", "") and "植物园" in summary.get("text", "")
-                    print("PASS: real long-term summary persisted; preference and unfinished commitment retained.")
+                    summaries = storage.read_document("long_summaries", [])
+                    summary = summaries[0] if summaries else {}
+                    assert len(summary.get("text", "")) <= 260 and "花生" in summary.get("text", "") and "植物园" in summary.get("text", "")
+                    print("PASS: independent summary persisted; characters:", len(summary["text"]))
+                    storage.write_document("recent_log", [])
+                    storage.write_document("pending_archive", [])
+                    recalled = long_memory.context("我们约好周日去哪里看兰花？")
+                    assert "久远记忆" in recalled and "植物园" in recalled
+                    answer = await server.chat(server.ChatIn(messages=[{"role":"user","content":"我们约好周日去哪里看兰花？"}]))
+                    assert isinstance(answer,dict) and "植物园" in answer["reply"]
+                    print("PASS: real model recalled old commitment using compressed long-term memory.")
                 finally:
                     storage.scope.reset(token)
-                assert not storage.read_document("summary.json", {}), "Cross-conversation summary leak"
+                assert not storage.read_document("long_summaries", []), "Cross-conversation summary leak"
         finally:
             store.engine.dispose()
 

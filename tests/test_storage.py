@@ -32,7 +32,7 @@ class StorageTests(unittest.TestCase):
             storage.append_log([{'who': '他', 'text': '只属于Alice的兰花约定'}])
             storage.write_document('scene_state', {'地点': '公园'})
             storage.write_document('summary.json', {'text': 'Alice summary', 'cursor': 1})
-            self.assertTrue(long_memory.recall('Alice的兰花约定'))
+            self.assertTrue(long_memory.recall('Alice的兰花约定')[1])
         finally:
             storage.scope.reset(token)
         token = storage.scope.set(('bob', 'bob-room'))
@@ -54,7 +54,7 @@ class StorageTests(unittest.TestCase):
         storage.write_document('scene_state', {'地点': '客厅'})
         pack = storage.memory_pack()
         self.assertEqual(len(pack['recent_log']), 20)
-        self.assertEqual(len(storage.read_document('archive.json', [])), 20)
+        self.assertEqual(storage.read_document('pending_archive', []), [])
         self.assertEqual(pack['scene_state']['地点'], '客厅')
         reopened = storage.Store('sqlite:///' + (Path(self.tmp.name)/'chat.db').as_posix())
         try:
