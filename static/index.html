@@ -461,6 +461,7 @@ async function send(){
         try{ evt = JSON.parse(raw.slice(5).trim()); }catch{ continue; }
 
         if (evt.delta){ acc += evt.delta; renderGroup(group, acc, true); }
+        else if (evt.status){ statusEl.textContent = evt.status; }
         else if (evt.retry){ acc = ""; renderGroup(group, "", true); statusEl.textContent = "连接断了，正在重试…"; }
         else if (evt.reset){ acc = ""; renderGroup(group, "", true); }
         else if (evt.error){
@@ -613,9 +614,20 @@ const sTokens = document.getElementById("sTokens");
 const sEff = document.getElementById("sEff");
 const sKeyHint = document.getElementById("sKeyHint");
 
+let settingsLoading = false;
 async function openSettings(){
+  if (settingsLoading) return;
+  settingsLoading = true;
+  sKey.value = "";
+  sEff.textContent = "正在读取配置…";
+  dlgStatus("", "");
+  if (!dlg.open) dlg.showModal();
+  const controls = [sBase, sModel, sKey, sTemp, sTokens,
+    document.getElementById("sSave"), document.getElementById("sTest")];
+  controls.forEach(control => control.disabled = true);
   try{
-    const r = await fetch("/api/settings");
+    const r = await fetch("/api/settings", {signal: AbortSignal.timeout(20000)});
+    if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     sBase.value = d.base_url || "";
     sModel.value = d.model || "";
@@ -630,10 +642,11 @@ async function openSettings(){
       "base_url：" + (eff.base_url || "（空，将用 .env）") + "\n" +
       "key：" + (eff.has_key ? "已读到" : "没有");
   }catch(e){
-    sEff.textContent = "读不到配置：" + e.message;
+    sEff.textContent = "配置加载失败，请关闭后重新打开：" + e.message;
+  }finally{
+    settingsLoading = false;
+    controls.forEach(control => control.disabled = false);
   }
-  dlgStatus("", "");
-  dlg.showModal();
 }
 
 function settingsDraft(){
@@ -768,6 +781,8 @@ document.getElementById("clear").addEventListener("click", ()=>{
   localStorage.setItem(SAVED_KEY, "0");
   render();
   statusEl.textContent = "";
+  dlg.close();
+  inputEl.focus();
   toast("当前对话已清除，记忆包没动", "warn");
 });
 
