@@ -147,7 +147,7 @@
   #settingsBtn{display:flex;align-items:center;justify-content:center;gap:9px;background:transparent;border:1px solid #425763;border-radius:14px;padding:8px 15px}
   #settingsBtn:hover{background:#2a3c48}
   #chat{min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#45606d transparent;padding:30px max(24px,calc((100vw - 900px)/2)) 24px;scroll-behavior:smooth}
-  #chat:empty::before{content:"故事从这里继续";display:block;text-align:center;margin-top:18vh;color:var(--dim);font:22px KaiTi,STKaiti,serif;letter-spacing:3px}
+
   .group{margin-bottom:22px}.msg{gap:12px;margin-bottom:14px}
   .avatar{width:36px;height:36px;font-size:14px;box-shadow:none}.avatar.me{background:#344a55;color:#d3e1e5}
   .body{max-width:min(620px,84%);min-width:0}.name{color:#afc1ca;font-size:11px;margin-bottom:5px}
@@ -177,11 +177,47 @@
   @media(max-width:360px){#composer .box{flex-wrap:wrap}#input{flex-basis:100%}#describe{margin-left:auto}#settingsDlg .row2{flex-direction:column;gap:0}.brand p{display:none}}
   @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
+
+  /* Restrained monochrome surfaces. */
+  :root{--bg:#101010;--panel:#191919;--line:#343434;--text:#ededed;--dim:#a6a6a6;--me:#303030}
+  body{background:#101010}
+  header{background:#101010;border-color:#292929;justify-content:flex-end;padding-top:12px;padding-bottom:12px}
+  #settingsBtn{background:#191919;border-color:#363636;border-radius:9px;color:#dedede}
+  #settingsBtn:hover{background:#252525}
+  button:focus-visible,input:focus-visible,textarea:focus-visible{outline-color:#c2c2c2}
+  #chat{scrollbar-color:#484848 transparent}
+  .name{color:#aaa}.avatar.me{background:#343434;color:#ddd}
+  .bubble{background:#202020;border-color:#303030;box-shadow:none;border-radius:5px 13px 13px 13px}
+  .msg.me .bubble{background:#303030;border-color:#424242;border-radius:13px 5px 13px 13px}
+  #composer{background:linear-gradient(transparent,#101010 24%)}
+  #composer .box{background:#1b1b1b;border-color:#3b3b3b;border-radius:14px;box-shadow:none}
+  #composer .box:focus-within{border-color:#777;box-shadow:none}
+  #input::placeholder{color:#929292}
+  #send,#settingsDlg .primary{background:#e0e0e0;color:#161616;border-radius:9px}
+  #send:hover{background:#fff}
+  #describe{border-color:#444;color:#ccc;border-radius:9px}
+  #describe:hover{background:#303030}
+  .hint{color:#909090}
+  .chip{background:#202020;border-color:#3a3a3a;color:#ddd}.chip:hover{background:#292929;border-color:#666}
+  #settingsDlg{background:#191919;border-color:#404040;border-radius:15px;box-shadow:0 20px 70px #0008}
+  #settingsDlg::backdrop{background:#000a;backdrop-filter:blur(3px)}
+  #settingsDlg .ghost{background:#262626;border-color:#424242;border-radius:9px}
+  #settingsDlg .ghost:hover{background:#333}
+  #settingsDlg input{background:#101010;border-color:#3c3c3c;border-radius:8px}
+  #settingsDlg input:focus{border-color:#777}
+  #settingsDlg label,.section-caption{color:#c7c7c7}
+  #settingsDlg .eff{background:#111;color:#aaa}
+  #settingsDlg .dlgFoot{background:#191919}
+  .modelChip{background:#242424;border-color:#444;color:#bbb}
+  .modelChip.live{color:#ddd;border-color:#666}
+  #toast{background:#262626;border-color:#444;color:#eee}
+  @media(max-width:600px){header{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:10px}#composer .box{border-radius:13px}#settingsDlg{border-radius:14px}}
+
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="brand-mark" aria-hidden="true">聊</span><div><h1>片刻 · 陪伴</h1><p>把故事，慢慢说下去</p></div></div>
+
   <button id="settingsBtn" title="打开设置" aria-label="打开设置"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--panel)"/><circle cx="15" cy="17" r="3" fill="var(--panel)"/></svg><span>设置</span></button>
 </header>
 
