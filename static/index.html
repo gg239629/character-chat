@@ -226,6 +226,15 @@
   @media(max-width:600px){.memory-actions{flex-direction:column}.memory-actions button{text-align:left;padding:12px 14px}.settings-tabs{margin-bottom:18px}}
 
   .character-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);flex:none;background:var(--bg)}
+  .character-status[hidden]{display:none}
+  #settingsDlg .status-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:52px;cursor:pointer;margin-bottom:16px;padding:8px 0;border-bottom:1px solid #303030;position:relative}
+  #settingsDlg .status-toggle input{position:absolute;width:1px;height:1px;padding:0;margin:0;opacity:0}
+  .status-switch{width:40px;height:24px;border-radius:20px;background:#333;border:1px solid #505050;flex:none;position:relative;transition:background .18s,border-color .18s}
+  .status-switch::after{content:"";position:absolute;width:16px;height:16px;top:3px;left:3px;border-radius:50%;background:#999;transition:transform .18s,background .18s}
+  .status-toggle input:checked + .status-switch{background:#dedede;border-color:#dedede}
+  .status-toggle input:checked + .status-switch::after{transform:translateX(16px);background:#222}
+  .status-toggle input:focus-visible + .status-switch{outline:2px solid #aaa;outline-offset:4px}
+  @media(prefers-reduced-motion:reduce){.status-switch,.status-switch::after{transition:none}}
   .character-status details{min-width:0;padding:8px 10px;background:#191919;border:1px solid #333;border-radius:9px}
   .character-status summary{cursor:pointer;list-style:none;min-height:44px}
   .character-status summary::-webkit-details-marker{display:none}
@@ -255,6 +264,7 @@
     <button type="button" id="tabMemory" role="tab" aria-selected="false" aria-controls="panelMemory" tabindex="-1">对话记忆</button>
   </div>
   <section id="panelMemory" role="tabpanel" aria-labelledby="tabMemory" hidden>
+    <label class="status-toggle"><span>显示状态栏</span><input id="showCharacterStatus" type="checkbox" role="switch" checked /><span class="status-switch" aria-hidden="true"></span></label>
   <p class="section-caption">对话与记忆</p>
   <div class="memory-actions">
     <button id="save" type="button" class="ghost">保存到记忆</button>
@@ -315,6 +325,15 @@
 <script>
 const STORE_KEY = "companion-chat-v1";
 const SAVED_KEY = "companion-chat-saved";
+const STATUS_VISIBLE_KEY = "companion-character-status-visible";
+const statusToggle = document.getElementById("showCharacterStatus");
+const characterStatus = document.querySelector(".character-status");
+try{statusToggle.checked = localStorage.getItem(STATUS_VISIBLE_KEY) !== "false";}catch{}
+characterStatus.hidden = !statusToggle.checked;
+statusToggle.addEventListener("change", ()=>{
+  characterStatus.hidden = !statusToggle.checked;
+  try{localStorage.setItem(STATUS_VISIBLE_KEY, String(statusToggle.checked));}catch{}
+});
 const NAMES = ["小婉", "小研", "小柳"];
 const META = {
   "小婉": { cls: "wan", label: "婉" },
