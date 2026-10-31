@@ -89,5 +89,18 @@ class StorageTests(unittest.TestCase):
         storage.initialize()
         self.assertEqual(storage.memory_pack()['scene_state'], {'地点': '已迁移'})
 
+class StartupPathTests(unittest.TestCase):
+    def test_postgres_does_not_create_local_directory(self):
+        with patch.object(storage, '_STORE', None), patch.dict('os.environ', {'DATABASE_URL': 'postgresql://test.invalid/db', 'RENDER': 'true'}), patch.object(Path, 'mkdir', side_effect=PermissionError('read-only filesystem')) as mkdir, patch.object(storage, 'Store') as constructor:
+            self.assertIs(storage.get_store(), constructor.return_value)
+            mkdir.assert_not_called()
+            constructor.assert_called_once_with('postgresql://test.invalid/db')
+
+    def test_render_without_database_fails_before_local_write(self):
+        with patch.object(storage, '_STORE', None), patch.dict('os.environ', {'DATABASE_URL': '', 'RENDER': 'true'}), patch.object(Path, 'mkdir') as mkdir:
+            with self.assertRaisesRegex(RuntimeError, 'DATABASE_URL'):
+                storage.get_store()
+            mkdir.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()

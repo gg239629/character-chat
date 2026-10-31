@@ -88,12 +88,12 @@ _STORE = None
 def get_store():
     global _STORE
     if _STORE is None:
-        folder = ROOT / "data"
-        folder.mkdir(exist_ok=True)
         url = os.getenv("DATABASE_URL")
         if not url:
             if os.getenv("RENDER"):
                 raise RuntimeError("Set DATABASE_URL to a persistent PostgreSQL database on Render")
+            folder = ROOT / "data"
+            folder.mkdir(exist_ok=True)
             url = "sqlite:///" + (folder / "chat.db").as_posix()
         _STORE = Store(url)
     return _STORE
