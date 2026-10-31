@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>陪伴角色 · 网页版</title>
 <style>
   :root{
@@ -133,37 +133,86 @@
     overflow:hidden; text-overflow:ellipsis;
   }
   .modelChip.live{color:#a8ecc4; border-color:#2f6b4a}
+
+  :root{--bg:#121c24;--panel:#1a2833;--line:#334550;--text:#edf2f4;--dim:#a8b8c2;--me:#346a73}
+  body{background:radial-gradient(ellipse at 50% 0,#233843 0,transparent 65%),var(--bg);overflow:hidden;font-size:15px;line-height:1.8}
+  button,input,textarea{-webkit-tap-highlight-color:transparent}
+  button{font-family:inherit;transition:background .16s,border-color .16s;min-height:44px}
+  button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #98d6cb;outline-offset:3px}
+  header{padding:18px max(24px,calc((100vw - 980px)/2));gap:20px;background:rgba(18,28,36,.9);border-color:#2b3d47}
+  .brand{display:flex;gap:12px;align-items:center;flex:1;min-width:0}
+  .brand-mark{display:grid;place-items:center;width:43px;height:43px;border:1px solid #597b7e;border-radius:15px 15px 15px 4px;color:#b9e1d5;font-family:KaiTi,STKaiti,serif;font-size:23px;background:#243d43}
+  .brand h1{margin:0;font:500 21px/1.3 KaiTi,STKaiti,"Microsoft YaHei",serif;letter-spacing:2px}
+  .brand p{margin:4px 0 0;font-size:11px;color:var(--dim);letter-spacing:1px}
+  #settingsBtn{display:flex;align-items:center;justify-content:center;gap:9px;background:transparent;border:1px solid #425763;border-radius:14px;padding:8px 15px}
+  #settingsBtn:hover{background:#2a3c48}
+  #chat{min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#45606d transparent;padding:30px max(24px,calc((100vw - 900px)/2)) 24px;scroll-behavior:smooth}
+  #chat:empty::before{content:"故事从这里继续";display:block;text-align:center;margin-top:18vh;color:var(--dim);font:22px KaiTi,STKaiti,serif;letter-spacing:3px}
+  .group{margin-bottom:22px}.msg{gap:12px;margin-bottom:14px}
+  .avatar{width:36px;height:36px;font-size:14px;box-shadow:none}.avatar.me{background:#344a55;color:#d3e1e5}
+  .body{max-width:min(620px,84%);min-width:0}.name{color:#afc1ca;font-size:11px;margin-bottom:5px}
+  .bubble{background:#233540;border:1px solid #344b57;padding:13px 17px;border-radius:4px 18px 18px 18px;line-height:1.95;box-shadow:0 3px 12px #07101720}
+  .msg.me .bubble{background:#305a64;border-color:#426f77;border-radius:18px 4px 18px 18px}
+  #composer{background:linear-gradient(transparent,#121c24 24%);border:0;padding:16px max(24px,calc((100vw - 900px)/2)) max(20px,env(safe-area-inset-bottom))}
+  #composer .box{background:#1d303b;border:1px solid #49616d;border-radius:20px;padding:8px;gap:8px;box-shadow:0 8px 30px #070f1830}
+  #input{border:0;background:transparent;border-radius:12px;min-width:0;padding:10px;min-height:48px;max-height:160px}
+  #input::placeholder{color:#9dafb9}#input:focus{outline:0}
+  #composer .box:focus-within{border-color:#8ec6bc;box-shadow:0 0 0 2px #8ec6bc18}
+  #send{background:#a7d5c6;color:#163a36;min-width:70px;font-weight:600;padding:11px 16px;border-radius:13px}
+  #send:hover{background:#c0e6d9}#describe{background:transparent;border-color:#4a6470;color:#cad9e1;padding:10px 13px;border-radius:13px}
+  .hint{justify-content:space-between;padding:0 8px;font-size:11px;color:#a0b3be}
+  .chip{background:#233843;border-color:#45606b;color:#e0eaee;border-radius:13px}
+  #settingsDlg{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow-y:auto;padding:28px;border-color:#49606d;background:#1a2833;border-radius:23px;box-shadow:0 24px 90px #0007;scrollbar-width:thin}
+  #settingsDlg::backdrop{background:#071018b3;backdrop-filter:blur(6px)}
+  #settingsDlg h2{font-size:23px;margin-bottom:22px}#settingsDlg h3{font-size:14px;margin:0}
+  .section-caption{font-size:13px;margin:0 0 10px;color:#d5e3e9}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:20px;margin:20px 0 16px}
+  .memory-actions{display:flex;gap:10px;flex-wrap:wrap}.settings-note{color:var(--dim);font-size:11px;margin:10px 0}
+  #settingsDlg .ghost{background:#263b47;border-color:#405a68;border-radius:11px}#settingsDlg .danger{color:#f2b7b0}
+  #settingsDlg .primary{background:#a7d5c6;color:#163a36;border-radius:11px;font-weight:600}
+  #settingsDlg input{background:#13232d;border-color:#3f5663;padding:11px 12px;border-radius:11px;width:100%;min-width:0;font-size:14px}
+  #settingsDlg label{color:#bdcbd2}#settingsDlg .field{margin-bottom:15px}#settingsDlg .row2 .field{min-width:0}
+  #settingsDlg .eff{background:#15232c;border-radius:11px;padding:12px;overflow-wrap:anywhere}.modelChip{max-width:210px;background:#223b43;color:#c0d9dc;border-color:#47626b}
+  #settingsDlg .dlgFoot{position:sticky;bottom:-28px;background:#1a2833;padding:14px 0 3px;gap:8px;flex-wrap:wrap}
+  @media(max-width:600px){header{padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top))}.brand h1{font-size:19px}.brand p{font-size:10px}#settingsBtn{padding:8px 11px}#chat{padding:20px 12px 12px}.avatar{width:30px;height:30px;font-size:12px}.msg{gap:8px}.body{max-width:calc(100% - 42px)}.bubble{padding:11px 13px;font-size:15px}#composer{padding:10px 10px max(12px,env(safe-area-inset-bottom))}#composer .box{gap:6px;padding:6px;border-radius:17px}#input{font-size:16px;padding:9px 7px}#send{min-width:54px;padding:10px 12px}#describe{padding:10px;font-size:12px}.hint{font-size:10px;gap:6px}#settingsDlg{padding:20px;border-radius:20px}#settingsDlg .row2{gap:10px}#settingsDlg .dlgFoot{bottom:-20px}.section-heading{flex-wrap:wrap}.modelChip{max-width:100%}}
+  @media(max-width:360px){#composer .box{flex-wrap:wrap}#input{flex-basis:100%}#describe{margin-left:auto}#settingsDlg .row2{flex-direction:column;gap:0}.brand p{display:none}}
+  @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
 </style>
 </head>
 <body>
 <header>
-  <button id="settingsBtn" title="设置模型">⚙ 设置</button>
-  <span id="modelChip" class="modelChip" title="当前生效模型">—</span>
-  <button id="save" style="margin-left:auto;border-color:#2f6b4a;color:#8fe0b0" title="把当前对话写进记忆包">保存</button>
-  <button id="clear" style="border-color:#6b2b3a;color:#ffb0be" title="清空当前对话（不动记忆包）">清除</button>
+  <div class="brand"><span class="brand-mark" aria-hidden="true">聊</span><div><h1>片刻 · 陪伴</h1><p>把故事，慢慢说下去</p></div></div>
+  <button id="settingsBtn" title="打开设置" aria-label="打开设置"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--panel)"/><circle cx="15" cy="17" r="3" fill="var(--panel)"/></svg><span>设置</span></button>
 </header>
 
-<dialog id="settingsDlg">
-  <h2>模型设置</h2>
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <h2 id="settingsTitle">设置</h2>
+  <p class="section-caption">对话与记忆</p>
+  <div class="memory-actions">
+    <button id="save" type="button" class="ghost">保存到记忆</button>
+    <button id="clear" type="button" class="ghost danger">清除当前对话</button>
+  </div>
+  <p class="settings-note">保存对话供后续回忆；清除仅移除当前浏览器中的对话。</p>
+  <div class="section-heading"><h3>模型连接</h3><span id="modelChip" class="modelChip" title="当前生效模型">—</span></div>
   <div class="field">
-    <label>接口地址 base_url</label>
+    <label for="sBase">接口地址 base_url</label>
     <input id="sBase" placeholder="https://api.openai.com/v1 ／ http://127.0.0.1:11434/v1" />
   </div>
   <div class="field">
-    <label>模型名 model</label>
+    <label for="sModel">模型名 model</label>
     <input id="sModel" placeholder="deepseek-chat ／ qwen2.5:14b ／ gpt-4o-mini" />
   </div>
   <div class="field">
-    <label>API Key<span id="sKeyHint" class="hintInline"></span></label>
+    <label for="sKey">API Key<span id="sKeyHint" class="hintInline"></span></label>
     <input id="sKey" type="password" placeholder="留空表示不修改" autocomplete="off" />
   </div>
   <div class="row2">
     <div class="field">
-      <label>temperature</label>
+      <label for="sTemp">temperature</label>
       <input id="sTemp" type="number" step="0.1" min="0" max="2" />
     </div>
     <div class="field">
-      <label>max_tokens（留空=不限）</label>
+      <label for="sTokens">max_tokens（留空=不限）</label>
       <input id="sTokens" type="number" step="50" min="0" placeholder="留空或 0 = 不限制" />
     </div>
   </div>
@@ -176,13 +225,13 @@
   </div>
 </dialog>
 
-<div id="chat"></div>
-<div id="toast"></div>
+<main id="chat" aria-label="聊天记录"></main>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <div id="composer">
   <div id="suggest"></div>
   <div class="box">
-    <textarea id="input" rows="1" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+    <textarea aria-label="输入消息" id="input" rows="1" placeholder="写下此刻想说的话…"></textarea>
     <button id="describe" title="帮你想接下来做什么，给三条可直接发送的描述">描述</button>
     <button id="send">发送</button>
   </div>
