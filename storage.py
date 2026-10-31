@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parent
 scope = ContextVar("memory_scope", default=("owner", "default"))
+request_snapshot = ContextVar("request_memory_snapshot", default=None)
 
 class Base(DeclarativeBase):
     pass
@@ -32,7 +33,7 @@ class Store:
         elif url.startswith("postgresql://"):
             url = "postgresql+psycopg://" + url[len("postgresql://"):]
         self.engine = create_engine(url, pool_pre_ping=True,
-            connect_args={"check_same_thread": False, "timeout": 30} if url.startswith("sqlite") else {})
+            connect_args={"check_same_thread": False, "timeout": 30} if url.startswith("sqlite") else {"connect_timeout": 15})
         Base.metadata.create_all(self.engine)
 
     def ensure(self, user, conversation, seed=None):
@@ -75,7 +76,11 @@ class Store:
                     Conversation.id == conversation, Conversation.user_id == user,
                     Conversation.version == row.version).values(data=data, version=row.version+1))
                 if updated.rowcount:
-                    db.commit(); return result
+                    db.commit()
+                    cached = request_snapshot.get()
+                    if cached is not None and cached["scope"] == (user, conversation):
+                        cached["data"] = data
+                    return result
                 db.rollback()
         raise RuntimeError("Concurrent memory updates; retry request")
 
@@ -159,22 +164,34 @@ def trim_recent(data):
         {"id": uuid4().hex, **item} for item in log[:cutoff])
     data["recent_log"] = log[cutoff:]
 
-def ensure_policy():
+def load_request_data(user, conversation):
     store = get_store()
-    if store.read(*scope.get()).get("memory_policy") != 2:
-        store.mutate(*scope.get(), prepare_policy)
+    data = store.read(user, conversation)
+    if data.get("memory_policy") != 2:
+        store.mutate(user, conversation, prepare_policy)
+        data = store.read(user, conversation)
+    return {"scope": (user, conversation), "data": data}
+
+def current_data():
+    cached = request_snapshot.get()
+    if cached is not None and cached["scope"] == scope.get():
+        return cached["data"]
+    return load_request_data(*scope.get())["data"]
+
+def ensure_policy():
+    current_data()
 
 def read_document(name, default):
-    ensure_policy()
-    return get_store().read(*scope.get()).get(name, default)
+    return current_data().get(name, default)
 
 def write_document(name, value):
-    ensure_policy()
-    get_store().mutate(*scope.get(), lambda data: data.__setitem__(name, value))
+    def change(data):
+        prepare_policy(data)
+        data[name] = value
+    get_store().mutate(*scope.get(), change)
 
 def memory_pack():
-    ensure_policy()
-    data = get_store().read(*scope.get())
+    data = current_data()
     return {"scene_state": data.get("scene_state", {}), "recent_log": data.get("recent_log", [])}
 
 def append_log(items):

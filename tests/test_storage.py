@@ -84,6 +84,27 @@ class StorageTests(unittest.TestCase):
                 self.assertNotIn('fake-test-key', json.dumps(settings))
                 self.assertNotEqual(client.get('/api/settings').json()['effective']['model'], 'isolated-test')
 
+    def test_request_snapshot_avoids_repeat_reads(self):
+        snapshot = storage.load_request_data('owner', 'default')
+        token = storage.request_snapshot.set(snapshot)
+        try:
+            with patch.object(self.store, 'read', wraps=self.store.read) as reads:
+                storage.memory_pack()
+                storage.read_document('settings', {})
+                storage.read_document('long_summaries', [])
+                self.assertEqual(reads.call_count, 0)
+                storage.write_document('scene_state', {'地点': '书房'})
+                self.assertEqual(storage.memory_pack()['scene_state']['地点'], '书房')
+                self.assertEqual(reads.call_count, 0)
+            self.store.ensure('other', 'other-room')
+            scope_token = storage.scope.set(('other', 'other-room'))
+            try:
+                self.assertEqual(storage.memory_pack()['scene_state'], {})
+            finally:
+                storage.scope.reset(scope_token)
+        finally:
+            storage.request_snapshot.reset(token)
+
     def test_import_does_not_overwrite_database(self):
         storage.write_document('scene_state', {'地点': '已迁移'})
         storage.initialize()
