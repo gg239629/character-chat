@@ -226,6 +226,7 @@ def info():
         "has_key": bool(cfg.get("api_key")),
         "system_chars": len(system),
         "fewshot_count": len(build_fewshot()),
+        "scene_state": storage.memory_pack().get("scene_state", {}),
     }
 
 

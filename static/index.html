@@ -225,6 +225,16 @@
   #settingsDlg #panelMemory{min-height:170px}
   @media(max-width:600px){.memory-actions{flex-direction:column}.memory-actions button{text-align:left;padding:12px 14px}.settings-tabs{margin-bottom:18px}}
 
+  .character-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);flex:none;background:var(--bg)}
+  .character-status details{min-width:0;padding:8px 10px;background:#191919;border:1px solid #333;border-radius:9px}
+  .character-status summary{cursor:pointer;list-style:none;min-height:44px}
+  .character-status summary::-webkit-details-marker{display:none}
+  .character-status summary:focus-visible{outline:2px solid #aaa;outline-offset:3px}
+  .character-status strong{display:block;font-size:13px;font-weight:600;color:#ddd}
+  .character-status .preview{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}
+  .character-status details[open] .preview{display:none}
+  .character-status .full-status{font-size:12px;color:#bbb;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:20vh;overflow-y:auto;margin-top:4px}
+  @media(max-width:600px){.character-status{padding:8px;gap:6px}.character-status details{padding:7px}}
 </style>
 </head>
 <body>
@@ -232,6 +242,11 @@
 
   <button id="settingsBtn" title="打开设置" aria-label="打开设置"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--panel)"/><circle cx="15" cy="17" r="3" fill="var(--panel)"/></svg><span>设置</span></button>
 </header>
+<section class="character-status" aria-label="三人当前状态">
+  <details data-character="小婉"><summary><strong>小婉</strong><span class="preview">正在读取状态…</span></summary><div class="full-status">正在读取状态…</div></details>
+  <details data-character="小研"><summary><strong>小研</strong><span class="preview">正在读取状态…</span></summary><div class="full-status">正在读取状态…</div></details>
+  <details data-character="小柳"><summary><strong>小柳</strong><span class="preview">正在读取状态…</span></summary><div class="full-status">正在读取状态…</div></details>
+</section>
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <h2 id="settingsTitle">设置</h2>
@@ -484,6 +499,7 @@ async function send(){
       group.appendChild(n);
     }
     persist();
+    refreshModel();
   }catch(err){
     group.innerHTML = "";
     const n = msgNode("", "网络错误：" + err.message, false, false);
@@ -562,10 +578,21 @@ inputEl.addEventListener("input", ()=>{
 const modelChip = document.getElementById("modelChip");
 let modelTimer = null;
 
+function renderCharacterStatus(scene){
+  document.querySelectorAll("[data-character]").forEach(card=>{
+    const value = scene && scene[card.dataset.character];
+    const status = typeof value === "string" && value.trim() ? value.trim() : "暂无场景状态";
+    card.querySelector(".preview").textContent = status;
+    card.querySelector(".full-status").textContent = status;
+  });
+}
+
 async function refreshModel(){
   try{
     const r = await fetch("/api/info");
+    if (!r.ok) throw new Error("状态读取失败");
     const d = await r.json();
+    renderCharacterStatus(d.scene_state);
     const name = d.model || "未配置";
     modelChip.textContent = name;
     modelChip.classList.toggle("live", !!d.has_key && name !== "(未配置)");
@@ -573,6 +600,9 @@ async function refreshModel(){
   }catch(e){
     modelChip.textContent = "离线";
     modelChip.classList.remove("live");
+    document.querySelectorAll("[data-character] .preview").forEach(el=>{
+      if(el.textContent === "正在读取状态…") el.textContent = "状态暂时无法读取";
+    });
   }
 }
 
