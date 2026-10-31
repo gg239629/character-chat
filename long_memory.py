@@ -9,16 +9,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent / "memory" / "long_term"
 LOCK = threading.RLock()
 
+import storage
+
 def read(name, default):
-    path = ROOT / name
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
+    return storage.read_document(name, default)
 
 def write(name, value):
-    ROOT.mkdir(parents=True, exist_ok=True)
-    path = ROOT / name
-    temp = path.with_suffix(".tmp")
-    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
-    temp.replace(path)
+    storage.write_document(name, value)
 
 def archive(log):
     with LOCK:

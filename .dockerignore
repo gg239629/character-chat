@@ -1,0 +1,9 @@
+.git/
+__pycache__/
+*.pyc
+.env
+.env.*
+data/
+*.db
+*.db-*
+memory/long_term/

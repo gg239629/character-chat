@@ -30,17 +30,3 @@ async def require_password(request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     return response
-
-# Platform Secrets take precedence over values saved in the local config.
-import server
-_original_load_config = server.load_config
-
-def cloud_config():
-    config = _original_load_config()
-    for key in ("api_key", "base_url", "model"):
-        value = os.getenv("MODEL_" + key.upper())
-        if value:
-            config[key] = value
-    return config
-
-server.load_config = cloud_config

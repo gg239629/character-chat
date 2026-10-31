@@ -35,8 +35,48 @@ MEMORY_JSON = MEMORY_DIR / "记忆包.json"
 MAIN_CHAR = "小婉"
 from role_routing import select_speaker, recent_rounds
 import long_memory
+import storage
+from fastapi import Request
+from uuid import uuid4
 
 app = FastAPI(title="陪伴角色 · 网页版")
+
+@app.on_event("startup")
+def initialize_database():
+    storage.initialize()
+
+@app.middleware("http")
+async def bind_conversation(request: Request, call_next):
+    # Future authentication must set request.state.user_id after verification.
+    # Never trust a user ID supplied by the browser.
+    user = getattr(request.state, "user_id", "owner")
+    conversation = request.headers.get("X-Conversation-ID", "default")
+    if len(conversation) > 64:
+        return JSONResponse({"error": "Invalid conversation"}, 400)
+    try:
+        storage.get_store().ensure(user, conversation) if conversation == "default" else storage.get_store().read(user, conversation)
+    except PermissionError:
+        return JSONResponse({"error": "Conversation unavailable"}, 404)
+    token = storage.scope.set((user, conversation))
+    try:
+        return await call_next(request)
+    finally:
+        storage.scope.reset(token)
+
+@app.get("/api/conversations")
+def list_conversations():
+    return storage.get_store().conversations(storage.scope.get()[0])
+
+@app.post("/api/conversations")
+def new_conversation():
+    user = storage.scope.get()[0]
+    identity = uuid4().hex
+    storage.get_store().ensure(user, identity)
+    return {"id": identity}
+
+@app.get("/api/memory/export")
+def export_memory():
+    return storage.memory_pack()
 
 
 # ---------------------------------------------------------------- 配置 & 素材
@@ -60,25 +100,31 @@ def load_config() -> dict[str, Any]:
     if CONFIG_FILE.exists():
         cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
 
+    if storage.scope.get()[0] != "owner":
+        cfg = {}
+
     env_file = cfg.get("env_file")
     if env_file:
         _load_env_file(Path(env_file))
 
     prefix = cfg.get("env_prefix", "DASHSCOPE")
-    cfg["base_url"] = cfg.get("base_url") or os.getenv(f"{prefix}_BASE_URL", "")
-    cfg["api_key"] = cfg.get("api_key") or os.getenv(f"{prefix}_API_KEY", "")
-    cfg["model"] = cfg.get("model") or os.getenv(f"{prefix}_MODEL", "")
+    for key in ("base_url", "api_key", "model"):
+        fallback = os.getenv(f"{prefix}_{key.upper()}", "") if storage.scope.get()[0] == "owner" else ""
+        cfg[key] = cfg.get(key) or fallback
     cfg.setdefault("temperature", 1.0)
     cfg.setdefault("max_tokens", 1500)
     cfg.setdefault("timeout", 120)
+    if storage.scope.get()[0] == "owner":
+        for key in ("api_key", "base_url", "model"):
+            cfg[key] = os.getenv("MODEL_" + key.upper()) or cfg.get(key, "")
+    cfg.update(storage.read_document("settings", {}))
     return cfg
 
 
 def write_memory_pack(pack: dict[str, Any]) -> None:
-    """Only persist scene state and conversation history."""
-    data = {"scene_state": pack.get("scene_state") or {},
-            "recent_log": pack.get("recent_log") or []}
-    MEMORY_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    """Update only the scene so concurrent history saves are preserved."""
+    storage.write_document("scene_state", pack.get("scene_state") or {})
+
 
 
 def read_text(path: Path) -> str:
@@ -118,14 +164,10 @@ def build_prompt_parts() -> tuple[str, str]:
         stable.append("# 角色档案与记忆\n" + memory_text)
 
     dynamic: list[str] = []
-    if MEMORY_JSON.exists():
-        try:
-            pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pack = {}
-        state = pack.get("scene_state")
-        if state:
-            dynamic.append("# 当前场景状态\n" + json.dumps(state, ensure_ascii=False, indent=2))
+    pack = storage.memory_pack()
+    state = pack.get("scene_state")
+    if state:
+        dynamic.append("# 当前场景状态\n" + json.dumps(state, ensure_ascii=False, indent=2))
 
     s = "\n\n".join(stable) if stable else "你是小婉，用第一人称继续这段故事。"
     d = "\n\n".join(dynamic)
@@ -140,10 +182,8 @@ def build_system_prompt() -> str:
 
 def build_fewshot(limit: int = 8) -> list[dict[str, str]]:
     """把记忆包里的最近对话转成 few-shot，语气照这个来。"""
-    if not MEMORY_JSON.exists():
-        return []
     try:
-        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
+        pack = storage.memory_pack()
     except json.JSONDecodeError:
         return []
 
@@ -204,9 +244,7 @@ def mask_key(key: str) -> str:
 @app.get("/api/settings")
 def get_settings():
     """配置文件里的值 + 实际生效的值。api_key 只给掩码。"""
-    file_cfg: dict[str, Any] = {}
-    if CONFIG_FILE.exists():
-        file_cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    file_cfg = load_config()
     eff = load_config()
     return {
         "model": file_cfg.get("model", ""),
@@ -225,9 +263,7 @@ def get_settings():
 @app.post("/api/settings")
 def set_settings(body: SettingsIn):
     """写回 config/model.json。api_key 留空表示不改。"""
-    cfg: dict[str, Any] = {}
-    if CONFIG_FILE.exists():
-        cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    cfg = dict(load_config())
 
     if body.model is not None:
         cfg["model"] = body.model.strip()
@@ -240,7 +276,7 @@ def set_settings(body: SettingsIn):
     if body.api_key is not None and body.api_key.strip():
         cfg["api_key"] = body.api_key.strip()
 
-    CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    storage.write_document("settings", cfg)
     return get_settings()
 
 
@@ -353,9 +389,6 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     if dynamic:
         payload.append({"role": "system", "content": dynamic})
     memory_messages = build_fewshot()
-    if MEMORY_JSON.exists():
-        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
-        long_memory.archive(pack.get("recent_log") or [])
     query = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     reference = long_memory.context(query, [m.get("content", "") for m in memory_messages + recent_rounds(messages, HISTORY_LIMIT)])
     if reference:
@@ -506,10 +539,8 @@ SCENE_SYSTEM = """你是场记，只更新当前场景，不续写故事。
 
 def update_scene_state(messages: list[dict[str, str]], force: bool = False) -> dict[str, str] | None:
     """每轮更新当前场景，不在记忆包中保存调度计数。"""
-    if not MEMORY_JSON.exists():
-        return None
     try:
-        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
+        pack = storage.memory_pack()
     except json.JSONDecodeError:
         return None
 
@@ -593,10 +624,8 @@ DESCRIBE_SYSTEM = """你是一个写作助手，不是戏里的角色。你不�
 
 def scene_brief() -> str:
     """把记忆包里的场景状态压成几行，给「描述」当上下文。"""
-    if not MEMORY_JSON.exists():
-        return ""
     try:
-        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
+        pack = storage.memory_pack()
     except json.JSONDecodeError:
         return ""
     state = pack.get("scene_state") or {}
@@ -710,16 +739,14 @@ async def chat(body: ChatIn):
 
 @app.post("/api/save")
 def save_memory(body: ChatIn):
-    """把前端这次新增的对话写进记忆包.json 的 recent_log。"""
-    if not MEMORY_JSON.exists():
-        return JSONResponse({"error": "memory/记忆包.json 不存在"}, 400)
+    """Append new messages to the scoped database conversation and archive."""
     try:
-        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
+        pack = storage.memory_pack()
     except json.JSONDecodeError as exc:
         return JSONResponse({"error": f"记忆包不是合法 JSON：{exc}"}, 400)
 
     names = ("小婉", "小研", "小柳")
-    log: list[dict[str, str]] = pack.setdefault("recent_log", [])
+    log: list[dict[str, str]] = []
     added = 0
 
     for msg in body.messages:
@@ -740,12 +767,9 @@ def save_memory(body: ChatIn):
             log.append({"who": who, "text": text})
             added += 1
 
-    long_memory.archive(log)
-    if len(log) > 200:
-        pack["recent_log"] = log[-200:]
+    total = storage.append_log(log)
 
     last_saved = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    write_memory_pack(pack)
 
     try:
         cfg = load_config()
@@ -760,7 +784,7 @@ def save_memory(body: ChatIn):
     except Exception:
         pass
 
-    return {"saved": added, "total": len(pack["recent_log"]), "last_saved": last_saved}
+    return {"saved": added, "total": total, "last_saved": last_saved}
 
 
 # ---------------------------------------------------------------- 静态页面

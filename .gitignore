@@ -9,3 +9,8 @@ config/model.json
 
 # Private runtime chat archive and summaries
 memory/long_term/
+
+# Local persistent database
+data/
+*.db
+*.db-*
