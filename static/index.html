@@ -213,6 +213,18 @@
   #toast{background:#262626;border-color:#444;color:#eee}
   @media(max-width:600px){header{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:10px}#composer .box{border-radius:13px}#settingsDlg{border-radius:14px}}
 
+
+  .settings-tabs{display:flex;gap:6px;background:#101010;padding:5px;border:1px solid #303030;border-radius:10px;margin:0 0 22px}
+  .settings-tabs button{flex:1;border:0;border-radius:7px;background:transparent;color:#aaa;font:inherit;font-size:14px;padding:9px 12px;cursor:pointer}
+  .settings-tabs button[aria-selected="true"]{background:#343434;color:#fff}
+  .settings-tabs button:hover{color:#fff}
+  #settingsDlg [role="tabpanel"][hidden]{display:none}
+  #settingsDlg .section-heading{border:0;padding-top:0;margin-top:0}
+  .settings-close{display:flex;justify-content:flex-end;border-top:1px solid #333;margin-top:18px;padding-top:14px}
+  #settingsDlg .dlgFoot{position:static;padding:4px 0 0}
+  #settingsDlg #panelMemory{min-height:170px}
+  @media(max-width:600px){.memory-actions{flex-direction:column}.memory-actions button{text-align:left;padding:12px 14px}.settings-tabs{margin-bottom:18px}}
+
 </style>
 </head>
 <body>
@@ -223,12 +235,19 @@
 
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <h2 id="settingsTitle">设置</h2>
+  <div class="settings-tabs" role="tablist" aria-label="设置分类">
+    <button type="button" id="tabModel" role="tab" aria-selected="true" aria-controls="panelModel" tabindex="0">模型连接</button>
+    <button type="button" id="tabMemory" role="tab" aria-selected="false" aria-controls="panelMemory" tabindex="-1">对话记忆</button>
+  </div>
+  <section id="panelMemory" role="tabpanel" aria-labelledby="tabMemory" hidden>
   <p class="section-caption">对话与记忆</p>
   <div class="memory-actions">
     <button id="save" type="button" class="ghost">保存到记忆</button>
     <button id="clear" type="button" class="ghost danger">清除当前对话</button>
   </div>
   <p class="settings-note">保存对话供后续回忆；清除仅移除当前浏览器中的对话。</p>
+  </section>
+  <section id="panelModel" role="tabpanel" aria-labelledby="tabModel">
   <div class="section-heading"><h3>模型连接</h3><span id="modelChip" class="modelChip" title="当前生效模型">—</span></div>
   <div class="field">
     <label for="sBase">接口地址 base_url</label>
@@ -257,8 +276,9 @@
   <div class="dlgFoot">
     <button id="sTest" class="ghost">测试连接</button>
     <button id="sSave" class="primary">保存</button>
-    <button id="sClose" class="ghost">关闭</button>
   </div>
+  </section>
+  <div class="settings-close"><button id="sClose" type="button" class="ghost">关闭</button></div>
 </dialog>
 
 <main id="chat" aria-label="聊天记录"></main>
@@ -560,6 +580,29 @@ modelTimer = setInterval(refreshModel, 15000);
 document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) refreshModel(); });
 
 /* ---------- 设置 ---------- */
+
+
+const settingsTabs = [...document.querySelectorAll('.settings-tabs [role="tab"]')];
+function activateSettingsTab(tab, focus = false){
+  for (const item of settingsTabs){
+    const active = item === tab;
+    item.setAttribute('aria-selected', String(active));
+    item.tabIndex = active ? 0 : -1;
+    document.getElementById(item.getAttribute('aria-controls')).hidden = !active;
+  }
+  if (focus) tab.focus();
+}
+settingsTabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => activateSettingsTab(tab));
+  tab.addEventListener('keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight') next = (index + 1) % settingsTabs.length;
+    if (event.key === 'ArrowLeft') next = (index + settingsTabs.length - 1) % settingsTabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = settingsTabs.length - 1;
+    if (next !== undefined){event.preventDefault();activateSettingsTab(settingsTabs[next], true);}
+  });
+});
 
 const dlg = document.getElementById("settingsDlg");
 const sBase = document.getElementById("sBase");
