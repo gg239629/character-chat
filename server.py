@@ -33,7 +33,7 @@ MEMORY_MD = MEMORY_DIR / "陪伴角色.md"
 MEMORY_JSON = MEMORY_DIR / "记忆包.json"
 
 MAIN_CHAR = "小婉"
-from role_routing import select_speaker, recent_rounds, merge_recent_history
+from role_routing import select_speaker, recent_rounds, merge_recent_history, reply_instruction
 import long_memory
 import storage
 from fastapi import Request
@@ -49,18 +49,22 @@ def initialize_database():
 async def bind_conversation(request: Request, call_next):
     # Future authentication must set request.state.user_id after verification.
     # Never trust a user ID supplied by the browser.
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
     user = getattr(request.state, "user_id", "owner")
     conversation = request.headers.get("X-Conversation-ID", "default")
     if len(conversation) > 64:
         return JSONResponse({"error": "Invalid conversation"}, 400)
     try:
-        storage.get_store().ensure(user, conversation) if conversation == "default" else storage.get_store().read(user, conversation)
+        snapshot = await asyncio.to_thread(storage.load_request_data, user, conversation)
     except PermissionError:
         return JSONResponse({"error": "Conversation unavailable"}, 404)
     token = storage.scope.set((user, conversation))
+    snapshot_token = storage.request_snapshot.set(snapshot)
     try:
         return await call_next(request)
     finally:
+        storage.request_snapshot.reset(snapshot_token)
         storage.scope.reset(token)
 
 @app.get("/api/conversations")
@@ -394,12 +398,7 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     reference = long_memory.context(query, [m.get("content", "") for m in history])
     if reference:
         payload.append({"role": "system", "content": reference})
-    speaker = select_speaker(history, [])
-    if speaker:
-        payload.append({"role": "system", "content": (
-            f"本轮主要回复角色：{speaker}。第一条台词以「{speaker}：」开头。"
-            "保持当前对话连续性；其他角色仅在必要时补充，不因默认主视角切换角色。"
-        )})
+    payload.append({"role": "system", "content": reply_instruction(history, [])})
     payload += [
         {"role": m["role"], "content": m["content"]}
         for m in history
@@ -508,6 +507,7 @@ async def chat_stream(body: ChatIn):
                 yield sse({"error": friendly_error(exc)})
                 return
 
+        yield sse({"status": "正在更新本轮场景…"})
         # Complete the scene update before allowing the next round.
         try:
             msgs = list(body.messages) + [{"role": "assistant", "content": full}]

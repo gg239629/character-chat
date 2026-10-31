@@ -11,16 +11,34 @@ def last_speaker(messages):
                 return matches[0]
     return None
 
+def reply_targets(messages):
+    content = next((m.get("content", "") for m in reversed(messages)
+                    if m.get("role") == "user"), "")
+    named = [name for name in NAMES if name in content]
+    group = any(word in content for word in ("你们", "大家", "各自", "每个人", "所有人", "都说说"))
+    return named, group
+
+
 def select_speaker(messages, memory_messages):
-    current = last_speaker(messages)
-    if current:
-        return current
-    if messages and messages[-1].get("role") == "user":
-        content = messages[-1].get("content") or ""
-        mentioned = [name for name in NAMES if name in content]
-        if len(mentioned) == 1:
-            return mentioned[0]
-    return last_speaker(messages) or last_speaker(memory_messages)
+    named, group = reply_targets(messages)
+    if len(named) == 1 and not group:
+        return named[0]
+    return last_speaker(messages) or last_speaker(memory_messages) or (named[0] if named else None)
+
+
+def reply_instruction(messages, memory_messages):
+    named, group = reply_targets(messages)
+    speaker = select_speaker(messages, memory_messages)
+    if group or len(named) > 1:
+        scope = "、".join(named) if named else "当前场景中被问到的在场角色"
+        return (f"本轮是多人提问，回复范围：{scope}。结合scene_state判断在场情况，"
+                "让被问到且在场的角色分别回应，不用一个人代表大家。允许三个人开口；"
+                "各自只说与自己有关的内容，不编造未在场角色的回答。每个角色标注姓名。")
+    if speaker:
+        return (f"本轮主要回复角色：{speaker}。第一条台词以「{speaker}：」开头。"
+                "明确点名单人时由被问的人回答；普通续聊沿用最近主要角色，其他在场角色可自然补充。"
+                "不强行凑人数，每条台词标注角色姓名。")
+    return "按当前提问对象和在场情况自然回应，每条台词标注角色姓名。"
 
 
 def recent_rounds(messages, limit):
