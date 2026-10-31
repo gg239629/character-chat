@@ -6,3 +6,6 @@ __pycache__/
 
 # Local model credentials
 config/model.json
+
+# Private runtime chat archive and summaries
+memory/long_term/

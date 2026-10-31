@@ -33,7 +33,8 @@ MEMORY_MD = MEMORY_DIR / "陪伴角色.md"
 MEMORY_JSON = MEMORY_DIR / "记忆包.json"
 
 MAIN_CHAR = "小婉"
-from role_routing import select_speaker
+from role_routing import select_speaker, recent_rounds
+import long_memory
 
 app = FastAPI(title="陪伴角色 · 网页版")
 
@@ -71,6 +72,13 @@ def load_config() -> dict[str, Any]:
     cfg.setdefault("max_tokens", 1500)
     cfg.setdefault("timeout", 120)
     return cfg
+
+
+def write_memory_pack(pack: dict[str, Any]) -> None:
+    """Only persist scene state and conversation history."""
+    data = {"scene_state": pack.get("scene_state") or {},
+            "recent_log": pack.get("recent_log") or []}
+    MEMORY_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def read_text(path: Path) -> str:
@@ -118,12 +126,6 @@ def build_prompt_parts() -> tuple[str, str]:
         state = pack.get("scene_state")
         if state:
             dynamic.append("# 当前场景状态\n" + json.dumps(state, ensure_ascii=False, indent=2))
-        resume = pack.get("resume_instruction")
-        if resume:
-            dynamic.append("# 续接要求\n" + resume)
-        rules = pack.get("rules")
-        if rules:
-            dynamic.append("# 必须遵守的规约\n" + "\n".join(f"- {r}" for r in rules))
 
     s = "\n\n".join(stable) if stable else "你是小婉，用第一人称继续这段故事。"
     d = "\n\n".join(dynamic)
@@ -147,7 +149,7 @@ def build_fewshot(limit: int = 8) -> list[dict[str, str]]:
 
     log = pack.get("recent_log") or []
     out: list[dict[str, str]] = []
-    for item in log[-limit:]:
+    for item in log:
         who = str(item.get("who", "")).strip()
         text = str(item.get("text", "")).strip()
         if not text:
@@ -159,7 +161,7 @@ def build_fewshot(limit: int = 8) -> list[dict[str, str]]:
         if out and out[-1] == item:      # 连续重复的不喂
             continue
         out.append(item)
-    return out
+    return recent_rounds(out, limit)
 
 
 # ---------------------------------------------------------------- 接口
@@ -342,7 +344,7 @@ def looks_intimate(messages: list[dict[str, str]]) -> bool:
     return hits >= 3
 
 
-HISTORY_LIMIT = 16   # 只带最近 16 条历史，更早的靠 scene_state 和摘要承接
+HISTORY_LIMIT = 16   # 最近 16 轮；当前尚未回复的用户消息计为一轮
 
 
 def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -351,6 +353,13 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
     if dynamic:
         payload.append({"role": "system", "content": dynamic})
     memory_messages = build_fewshot()
+    if MEMORY_JSON.exists():
+        pack = json.loads(MEMORY_JSON.read_text(encoding="utf-8"))
+        long_memory.archive(pack.get("recent_log") or [])
+    query = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+    reference = long_memory.context(query, [m.get("content", "") for m in memory_messages + recent_rounds(messages, HISTORY_LIMIT)])
+    if reference:
+        payload.append({"role": "system", "content": reference})
     payload += memory_messages
     speaker = select_speaker(messages, memory_messages)
     if speaker:
@@ -360,7 +369,7 @@ def build_payload(messages: list[dict[str, str]]) -> list[dict[str, str]]:
         )})
     payload += [
         {"role": m["role"], "content": m["content"]}
-        for m in messages[-HISTORY_LIMIT:]
+        for m in recent_rounds(messages, HISTORY_LIMIT)
         if m.get("content")
     ]
     if looks_intimate(messages):
@@ -454,26 +463,25 @@ async def chat_stream(body: ChatIn):
                     {"role": "system", "content": NUDGE},
                 ]
                 stream2 = await client.chat.completions.create(messages=nudge, stream=True, **kwargs)
+                full = ""
                 async for chunk in stream2:
                     if not chunk.choices:
                         continue
                     piece = chunk.choices[0].delta.content or ""
                     if piece:
+                        full += piece
                         yield sse({"delta": piece})
             except Exception as exc:
                 yield sse({"error": friendly_error(exc)})
                 return
 
+        # Complete the scene update before allowing the next round.
+        try:
+            msgs = list(body.messages) + [{"role": "assistant", "content": full}]
+            await asyncio.to_thread(update_scene_state, msgs)
+        except Exception:
+            pass
         yield sse({"done": True})
-
-        # 每次回完，后台把场景状态更新一遍（不阻塞前端）
-        async def _refresh():
-            try:
-                msgs = list(body.messages) + [{"role": "assistant", "content": full}]
-                await asyncio.to_thread(update_scene_state, msgs)
-            except Exception:
-                pass
-        asyncio.create_task(_refresh())
 
     return StreamingResponse(
         gen(),
@@ -482,23 +490,22 @@ async def chat_stream(body: ChatIn):
     )
 
 
-SCENE_SYSTEM = """你是场记，只负责更新这份戏的场景状态。
-
-输出一个 JSON 对象，键固定为：时间、地点、小婉、小研、小柳、上一段停在。
-- 以【最近的对话】为准。对话里发生的变化必须覆盖旧状态，旧状态里已经过时的内容要丢掉。
-- 对话里没提到、也没改变的项，保留原值。
-- 每项一句话，不超过 25 个字，写事实，不写猜测、不写心理活动。
-- 「上一段停在」写最后一句台词或最后一个动作的落点，要能让下一个人接着演。
-- 对话里出现时间线索（天亮、早上、出门、上班、晚上、吃完饭）就必须更新「时间」，不许留着旧值。
-- 都在床上、都坐着、有人站起来走动，这种位置变化也要更新到对应人物的那一项。
-- 只输出 JSON，不要解释，不要代码块标记。"""
-
-
-SCENE_EVERY = 6   # 每几轮自动更新一次场景状态（省钱）
+SCENE_FIELDS = ("时间", "地点", "在场人物", "小婉", "小研", "小柳", "主要交谈角色", "上一段停在")
+SCENE_SYSTEM = """你是场记，只更新当前场景，不续写故事。
+输出 JSON 对象，字段为：时间、地点、在场人物、小婉、小研、小柳、主要交谈角色、上一段停在。所有值必须是字符串。
+依据：旧场景、最近四轮完整对话，以及单独标出的本轮对话。本轮是更新重点。
+- 用户明确的纠正、时间跳转和场景切换优先于旧场景及与之冲突的回复。例如快进到第二天，必须清理昨夜正在进行的动作。
+- 只记录已经发生的事实。计划、愿望、提问、回忆、假设、引用不等于正在发生；准备去厨房不等于已经在厨房。
+- 本轮明确变化覆盖旧状态；没有变化的保留。位置和动作改变时移除不再成立的旧状态，不要把新旧状态堆在一起。
+- 没有依据的内容写“未知”，不补造位置、行为、心理或离场、在场事实。
+- 在场人物只列有依据仍在当前场景的人；离场人物可在对应人物字段记录最后明确去向，不继续其旧动作。
+- 主要交谈角色依据本轮最终回复首个角色标签；没有标签时参考最近对话，不默认小婉。
+- 上一段停在只记录当前最后的事实或对话落点，不写下一步计划。
+- 每个字段简短写事实，原则上不超过 50 字。不写剧情总结，不输出额外字段、解释或代码围栏。"""
 
 
 def update_scene_state(messages: list[dict[str, str]], force: bool = False) -> dict[str, str] | None:
-    """节流地重写 scene_state：攒够 SCENE_EVERY 轮，或 force=True 时才真的调模型。"""
+    """每轮更新当前场景，不在记忆包中保存调度计数。"""
     if not MEMORY_JSON.exists():
         return None
     try:
@@ -506,23 +513,20 @@ def update_scene_state(messages: list[dict[str, str]], force: bool = False) -> d
     except json.JSONDecodeError:
         return None
 
-    turns = int(pack.get("scene_turns_since_update") or 0)
-    if not force:
-        turns += 1
-        pack["scene_turns_since_update"] = turns
-        if turns < SCENE_EVERY:
-            MEMORY_JSON.write_text(json.dumps(pack, ensure_ascii=False, indent=2), encoding="utf-8")
-            return None
-
     old_state = pack.get("scene_state") or {}
     if not isinstance(old_state, dict):
         old_state = {}
 
     transcript = []
-    for m in messages[-6:]:
+    for m in recent_rounds(messages, 4):
         who = "他" if m.get("role") == "user" else "戏里"
         transcript.append(f"{who}：{(m.get('content') or '').strip()}")
 
+    current_round = recent_rounds(messages, 1)
+    current_text = "\n".join(
+        f"{'用户' if m.get('role') == 'user' else '角色回复'}：{m.get('content') or ''}"
+        for m in current_round
+    )
     cfg = load_config()
     if check_cfg(cfg):
         return None
@@ -532,6 +536,7 @@ def update_scene_state(messages: list[dict[str, str]], force: bool = False) -> d
         {"role": "user", "content":
             "【当前场景状态】\n" + json.dumps(old_state, ensure_ascii=False, indent=2)
             + "\n\n【最近的对话】\n" + "\n".join(transcript)
+            + "\n\n【本轮对话：更新重点】\n" + current_text
             + "\n\n【任务】输出更新后的场景状态 JSON。"},
     ]
 
@@ -553,16 +558,15 @@ def update_scene_state(messages: list[dict[str, str]], force: bool = False) -> d
     if not isinstance(new_state, dict) or not new_state:
         return None
 
-    merged = dict(old_state)
-    for k in ("时间", "地点", "小婉", "小研", "小柳", "上一段停在"):
+    merged = {k: old_state.get(k, "未知") for k in SCENE_FIELDS}
+    for k in SCENE_FIELDS:
         v = new_state.get(k)
         if isinstance(v, str) and v.strip():
             merged[k] = v.strip()
     merged["更新时间"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     pack["scene_state"] = merged
-    pack["scene_turns_since_update"] = 0
-    MEMORY_JSON.write_text(json.dumps(pack, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_memory_pack(pack)
     return merged
 
 
@@ -696,6 +700,11 @@ async def chat(body: ChatIn):
     except Exception as exc:
         return JSONResponse({"error": friendly_error(exc)}, 502)
 
+    try:
+        await asyncio.to_thread(update_scene_state,
+                               list(body.messages) + [{"role": "assistant", "content": reply}])
+    except Exception:
+        pass
     return {"reply": reply}
 
 
@@ -731,19 +740,27 @@ def save_memory(body: ChatIn):
             log.append({"who": who, "text": text})
             added += 1
 
+    long_memory.archive(log)
     if len(log) > 200:
         pack["recent_log"] = log[-200:]
 
-    pack["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    MEMORY_JSON.write_text(json.dumps(pack, ensure_ascii=False, indent=2), encoding="utf-8")
+    last_saved = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    write_memory_pack(pack)
+
+    try:
+        cfg = load_config()
+        if not check_cfg(cfg):
+            long_memory.refresh_summary(cfg)
+    except Exception:
+        pass  # Archive remains intact; retry summarization on the next save.
 
     # 顺手把场景状态刷一遍（用户点保存 = 一个检查点）
     try:
-        update_scene_state(body.messages[-6:], force=True)
+        update_scene_state(body.messages, force=True)
     except Exception:
         pass
 
-    return {"saved": added, "total": len(pack["recent_log"]), "last_saved": pack["last_saved"]}
+    return {"saved": added, "total": len(pack["recent_log"]), "last_saved": last_saved}
 
 
 # ---------------------------------------------------------------- 静态页面
