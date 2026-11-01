@@ -66,7 +66,7 @@ class DiscussionIntegrationTests(unittest.TestCase):
             def model(cfg):
                 async def create(**kwargs):
                     n=len(calls);payload=kwargs['messages'];name=actors.ROLES[expected[n]]
-                    self.assertIn('你只扮演'+name,payload[-1]['content'])
+                    self.assertTrue(any('你只扮演'+name in m['content'] for m in payload if m['role']=='system'))
                     for previous in texts[:n]:
                         self.assertIn(previous,json.dumps(payload,ensure_ascii=False))
                         self.assertTrue(any(m['content']==previous for m in chat_history.messages()))

@@ -37,7 +37,7 @@ main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;borde
 </main>
 <dialog id="accountDialog"><h2>账号</h2><p id="accountHint">正在读取账号状态…</p><form id="accountForm" hidden><label for="accountName">用户名</label><input id="accountName" autocomplete="username" maxlength="40" required><label for="accountPassword" style="margin-top:16px">密码</label><input id="accountPassword" type="password" autocomplete="current-password" maxlength="128" required><div class="actions"><button class="quiet" type="button" id="registerAccount">注册</button><button class="primary" type="submit">登录</button></div></form><button class="quiet" id="logoutAccount" hidden>退出登录</button><div class="actions"><button class="quiet" id="closeAccount">关闭</button></div></dialog>
 <dialog id="homeSettingsDialog" aria-labelledby="homeSettingsTitle"><h2 id="homeSettingsTitle">设置</h2>
-<div id="storyChoiceField" hidden><label for="settingsStory">故事</label><select id="settingsStory"></select></div>
+<button class="quiet" id="homeModelSettings" style="width:100%;margin-bottom:20px">大模型配置</button><div id="storyChoiceField" hidden><label for="settingsStory">故事</label><select id="settingsStory"></select></div>
 <div class="setting-row"><div><label id="initiativeLabel">角色主动消息</label><p>关闭后暂停主动联系和私下交流。<br>你发消息后，她们仍会正常回复。</p></div><button class="toggle" id="initiativeToggle" role="switch" aria-checked="false" aria-labelledby="initiativeLabel" disabled></button></div>
 <div class="danger-zone"><h3>重置聊天</h3><p>清除群聊、三人私聊、角色间私聊和全部记忆，回到第一天清晨。保留头像和模型设置。</p><button class="danger" id="resetStory">重置聊天记录</button></div>
 <p id="homeSettingsStatus" role="status" aria-live="polite"></p><div class="actions"><button class="quiet" id="closeHomeSettings">关闭</button></div></dialog>
@@ -145,5 +145,7 @@ document.getElementById('confirmReset').onclick=async()=>{
  }catch(e){resetStatus.textContent=e.message;}finally{button.disabled=false;document.getElementById('cancelReset').disabled=false;}
 };
 </script>
+<script src="/static/global-model.js"></script>
+<script src="/static/onboarding.js"></script>
 </body>
 </html>

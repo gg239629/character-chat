@@ -41,7 +41,7 @@ def scope(kind):
 
 
 def config(kind,cfg):
-    """Role-agent work uses its own config; all helpers use this story's group."""
+    """Agent work uses its own config; helpers use group, suggestions use Wan."""
     if kind=='suggestion':return role_config('wan')
     if kind in ('character','action','initiative','initiative_public','peer_inquiry','peer_reply','peer_followup','action_voice'):
         return cfg

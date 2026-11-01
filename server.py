@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 import model_usage
+import model_defaults
 import world_events
 import peer_chat
 import chat_inbox
@@ -415,7 +416,10 @@ def load_config() -> dict[str, Any]:
     if storage.scope.get()[0] == "owner":
         for key in ("api_key", "base_url", "model"):
             cfg[key] = os.getenv("MODEL_" + key.upper()) or cfg.get(key, "")
-    cfg.update(secrets_store.decode_settings(storage.read_document("settings", {})))
+    defaults=model_defaults.read(storage.scope.get()[0])
+    cfg.update(defaults)
+    if not defaults or storage.read_document('model_override',False):
+        cfg.update(secrets_store.decode_settings(storage.read_document("settings", {})))
     return cfg
 
 
@@ -614,6 +618,7 @@ def role_avatars():
 
 
 class SettingsIn(BaseModel):
+    inherit_model: bool | None = None
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
@@ -633,6 +638,53 @@ def mask_key(key: str) -> str:
     if len(key) <= 8:
         return "•" * len(key)
     return key[:4] + "•" * 6 + key[-4:]
+
+
+class HomeModelIn(BaseModel):
+    model:str=Field(default='',max_length=200)
+    base_url:str=Field(default='',max_length=2000)
+    api_key:str=Field(default='',max_length=4000)
+    temperature:float=Field(default=1,ge=0,le=2)
+    max_tokens:int=Field(default=1500,ge=0,le=100000)
+
+
+def home_model_draft(body):
+    cfg=model_defaults.read(storage.scope.get()[0])
+    cfg.update(model=body.model.strip(),base_url=body.base_url.strip(),temperature=body.temperature,
+        max_tokens=body.max_tokens or None,timeout=120)
+    if body.api_key.strip():cfg['api_key']=body.api_key.strip()
+    return cfg
+
+
+@app.get('/api/home/model')
+def home_model():
+    import hashlib
+    user=storage.scope.get()[0];cfg=model_defaults.read(user)
+    return {'model':cfg.get('model',''),'base_url':cfg.get('base_url',''),
+        'temperature':cfg.get('temperature',1),'max_tokens':cfg.get('max_tokens',1500),
+        'api_key_masked':mask_key(cfg.get('api_key','')),'configured':bool(cfg.get('model') and cfg.get('api_key')),
+        'tutorial_scope':hashlib.sha256(user.encode()).hexdigest()[:16]}
+
+
+@app.put('/api/home/model')
+def save_home_model(body:HomeModelIn):
+    cfg=home_model_draft(body)
+    if check_cfg(cfg):raise HTTPException(422,'请填写模型名称和API Key')
+    try:model_defaults.save(storage.scope.get()[0],cfg)
+    except ValueError:raise HTTPException(400,'无法加密保存密钥，请检查服务加密配置')
+    return home_model()
+
+
+@app.post('/api/home/model/test')
+async def test_home_model(body:HomeModelIn):
+    cfg=home_model_draft(body)
+    if check_cfg(cfg):raise HTTPException(422,'请填写模型名称和API Key')
+    client=make_client(cfg)
+    try:
+        response=await model_usage.complete(client,cfg,[{'role':'user','content':'只回复：好'}],'connection_test',temperature=0,max_tokens=40)
+        return {'ok':bool(response.choices),'model':cfg['model']}
+    except Exception as error:raise HTTPException(502,'连接失败：'+type(error).__name__)
+    finally:await client.close()
 
 
 @app.get('/api/usage')
@@ -662,6 +714,7 @@ def get_settings():
         "memory_preferences": storage.read_document('memory_preferences',{'group_public':.7,'private_public':.3}),
         "group_mode": storage.read_document('group_mode', 'natural'),
         "purpose": "scene" if not chat_world.get() or chat_world.get()['channel'] == 'group' else "character",
+        "inherit_model":not storage.read_document('model_override',False) if model_defaults.read(storage.scope.get()[0]) else not bool(storage.read_document('settings',{})),
     }
 
 
@@ -690,7 +743,13 @@ def set_settings(body: SettingsIn):
         encrypted = secrets_store.encode_settings({key: cfg.get(key) for key in ('model','base_url','api_key','temperature','max_tokens','timeout')})
     except ValueError as exc:
         raise HTTPException(400, str(exc))
-    storage.write_document("settings", encrypted)
+    model_fields=('model','base_url','api_key','temperature','max_tokens')
+    if body.inherit_model is True:
+        storage.write_document('settings',{})
+        storage.write_document('model_override',False)
+    elif body.inherit_model is False or any(getattr(body,k) is not None for k in model_fields):
+        storage.write_document('settings',encrypted)
+        storage.write_document('model_override',True)
     if body.persona is not None:
         storage.write_document('persona', body.persona.strip())
     if body.relationship is not None:
@@ -710,7 +769,8 @@ def set_settings(body: SettingsIn):
 async def test_model(body: SettingsIn | None = None):
     """Test draft settings without saving them; blank keys reuse the saved key."""
     cfg = dict(load_config())
-    if body is not None:
+    if body is not None and body.inherit_model is True:cfg=model_defaults.read(storage.scope.get()[0])
+    if body is not None and body.inherit_model is not True:
         for key in ("model", "base_url", "api_key"):
             value = getattr(body, key)
             if value is not None and (key != "api_key" or value.strip()):

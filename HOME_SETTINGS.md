@@ -17,3 +17,16 @@
 后端接口：`GET/PUT /api/home/settings`、`POST /api/home/reset`。旧脚本调用 `story_reset.reset_story(..., backup_dir)` 仍默认备份，网页明确使用 `backup=False`。
 
 验证：`tests/test_home_settings.py`、`node tests/test_home_settings.cjs`；真实模型验证 `python tests/live_home_settings_check.py`。
+
+
+## 大模型配置与每日教程
+
+主页左下角设置中的“大模型配置”保存当前账号的默认模型、接口、加密API Key、温度和输出长度。默认配置对该账号的全部故事生效，各会话可关闭“使用主页默认模型”后单独覆盖，再开启则恢复继承。仅保存角色性格不会冻结默认模型。
+
+首次保存主页默认模型后，旧的未标记独立覆盖配置转为继承；原值不主动删除。之后明确单独保存的覆盖不随主页配置改变。描述功能仍按小婉生效配置路由，小婉未覆盖时继承主页模型；其他辅助功能按群聊生效配置路由，群聊未覆盖时继承主页模型。
+
+新表 chat_model_defaults 随服务启动创建，按可信用户ID隔离，API只返回密钥掩码。复制数据库工具包含该表，故事重置不删除账号默认模型。
+
+主页和聊天页共用使用教程。按浏览器本地日期与账号标识记录当天是否已经展示，展示后当天刷新/重入不再弹，第二天首次打开再显示；不同浏览器独立记录。教程引导主页左下角配置与测试模型，并说明独立覆盖、主动消息开关和重置行为。
+
+验证：tests/test_model_defaults.py、node tests/test_onboarding.cjs；真实测试使用临时数据库验证四会话继承和中性单字连接，不写入真实聊天。

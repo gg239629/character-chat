@@ -17,6 +17,7 @@ from peer_chat import Message as PeerMessage, Archive as PeerArchive, Job as Pee
 from chat_inbox import Turn as InboxTurn
 from accounts import Account, LoginSession
 from task_health import Failure
+from model_defaults import Defaults as ModelDefaults
 
 
 def copy_rows(source_path, destination):
@@ -32,7 +33,7 @@ def copy_rows(source_path, destination):
         messages = source.execute("SELECT id, conversation_id, role, content, speaker, created_at FROM chat_messages").fetchall() if has_messages else []
         extras=[]
         from sqlalchemy import JSON
-        for model in (ReadCursor,Action,Checkpoint,Subscription,PushJob,MaintenanceJob,Usage,PeerMessage,PeerArchive,PeerJob,InboxTurn,Account,LoginSession,Failure):
+        for model in (ReadCursor,Action,Checkpoint,Subscription,PushJob,MaintenanceJob,Usage,PeerMessage,PeerArchive,PeerJob,InboxTurn,Account,LoginSession,Failure,ModelDefaults):
             table=model.__table__
             if not source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table.name,)).fetchone():
                 continue

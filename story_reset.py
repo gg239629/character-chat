@@ -16,7 +16,7 @@ import storage
 import peer_chat
 import chat_inbox
 
-CONFIG_FIELDS={'title','avatar','settings','persona','behavior','group_mode','world_id','channel','public_persona','memory_preferences','initiative_enabled','user_profile'}
+CONFIG_FIELDS={'title','avatar','settings','persona','behavior','group_mode','world_id','channel','public_persona','memory_preferences','initiative_enabled','user_profile','model_override'}
 
 
 def reset_story(user,world,backup_dir=None,backup=True):

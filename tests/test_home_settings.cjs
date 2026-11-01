@@ -1,6 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const source=fs.readFileSync('static/home.html','utf8');
-const code=source.slice(source.indexOf('const homeSettingsDialog='),source.lastIndexOf('</script>'));
+const code=source.slice(source.indexOf('const homeSettingsDialog='),source.indexOf('</script>',source.indexOf('const homeSettingsDialog=')));
 (async()=>{
  const nodes=new Map(),values=new Map(),calls=[];
  function node(id){if(!nodes.has(id))nodes.set(id,{value:'default',textContent:'',disabled:false,hidden:false,attrs:{},children:[],

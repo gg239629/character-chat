@@ -376,7 +376,7 @@
     <div class="dlgFoot"><button id="saveCharacter" class="primary" type="button">保存角色设定</button></div>
   </section>
   <section id="panelModel" role="tabpanel" aria-labelledby="tabModel">
-  <p id="modelPurpose" class="settings-note"></p>
+  <p id="modelPurpose" class="settings-note"></p><label style="display:flex;align-items:center;gap:10px"><input id="inheritModel" type="checkbox" style="width:auto">使用主页默认模型</label><p class="settings-note">关闭后，可单独配置这个会话；描述功能使用小婉生效的模型。</p>
   <div class="section-heading"><h3>模型连接</h3><span id="modelChip" class="modelChip" title="当前生效模型">—</span></div>
   <div class="field">
     <label for="sBase">接口地址 base_url</label>
@@ -900,6 +900,7 @@ async function openSettings(){
     document.getElementById("personaField").hidden=d.purpose === "scene";
     document.getElementById("groupModeField").hidden=d.purpose !== "scene";
     document.getElementById("modelPurpose").textContent=d.purpose === "scene" ? "三位角色使用各自私聊模型。这里的模型用于群聊调度、场景更新和记忆摘要；描述建议使用小婉的模型。" : "此角色的模型和个性设定同时用于私聊与群聊发言。";
+    document.getElementById("inheritModel").checked=Boolean(d.inherit_model);
     sBase.value = d.base_url || "";
     sModel.value = d.model || "";
     sKey.value = "";
@@ -917,12 +918,19 @@ async function openSettings(){
   }finally{
     settingsLoading = false;
     controls.forEach(control => control.disabled = false);
+    updateModelInheritance();
   }
 }
 
+function updateModelInheritance(){
+ const inherited=document.getElementById('inheritModel').checked;
+ [sBase,sModel,sKey,sTemp,sTokens].forEach(el=>el.disabled=inherited);
+}
+document.getElementById('inheritModel').onchange=updateModelInheritance;
 function settingsDraft(){
   const tokenRaw = sTokens.value.trim();
   const body = {
+    inherit_model:document.getElementById("inheritModel").checked,
     base_url: sBase.value.trim(),
     model: sModel.value.trim(),
     persona: sPersona.value,
@@ -948,6 +956,7 @@ async function saveSettings(){
     const d = await r.json();
     if (!r.ok || d.error){ dlgStatus("保存失败：" + (d.error || JSON.stringify(d.detail)), "err"); return; }
     const eff = d.effective || {};
+    if(body.inherit_model){sBase.value=d.base_url||'';sModel.value=d.model||'';sTemp.value=d.temperature??1;sTokens.value=d.max_tokens??0;}
     sKeyHint.textContent = d.api_key_masked ? "当前：" + d.api_key_masked : "当前：未设置";
     sEff.textContent = "实际生效\nmodel：" + (eff.model || "未设置") +
       "\nbase_url：" + (eff.base_url || "未设置") + "\nkey：" + (eff.has_key ? "已读到" : "没有");
@@ -1086,5 +1095,6 @@ load().then(async()=>{
   });
 }).catch(e=>{chatEl.style.visibility='visible';chatEl.removeAttribute('aria-busy');statusEl.textContent=e.message;});
 </script>
+<script src="/static/onboarding.js"></script>
 </body>
 </html>
