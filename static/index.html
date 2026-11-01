@@ -283,7 +283,6 @@
   #settingsDlg #sPersona,#settingsDlg #sRelationship,#settingsDlg select{background:#111;color:#ddd;border:1px solid #444;border-radius:4px;padding:10px;font:inherit;width:100%}
   #settingsDlg [hidden]{display:none!important}
   .settings-tabs{overflow-x:auto}.settings-tabs button{flex:1 0 auto;white-space:nowrap;padding:9px 10px;font-size:12px}
-  #panelBehavior textarea{background:#111;color:#ddd;border:1px solid #444;border-radius:4px;font:inherit;padding:10px;width:100%;min-height:64px}
   .action-entry{padding:12px 0;border-bottom:1px solid #333;font-size:13px;color:#bbb;overflow-wrap:anywhere}.action-entry p{margin:5px 0}.action-entry button{margin-top:6px}
 
   /* Settings: quiet surfaces, clear groups, consistent form rhythm. */
@@ -321,6 +320,7 @@
   #settingsDlg button:focus-visible{outline:2px solid #ddd;outline-offset:3px}
   @media(max-width:600px){#settingsDlg{padding:20px;width:calc(100vw - 24px);max-height:90dvh;border-radius:14px}#settingsDlg h2{margin-bottom:18px}#settingsDlg .settings-tabs{margin-bottom:22px}#settingsDlg .settings-tabs button{padding:10px 12px}#settingsDlg .row2{grid-template-columns:1fr;gap:0}#settingsDlg .profile-actions button,#settingsDlg .dlgFoot button{flex:1}#settingsDlg .memory-actions{flex-direction:column}#settingsDlg .field{margin-bottom:20px}}
 </style>
+<link rel="stylesheet" href="/static/settings-layout.css">
 </head>
 <body>
 <header>
@@ -342,13 +342,7 @@
     <button type="button" id="tabCharacter" role="tab" aria-selected="false" aria-controls="panelCharacter" tabindex="-1">角色设定</button>
     <button type="button" id="tabMemory" role="tab" aria-selected="false" aria-controls="panelMemory" tabindex="-1">显示与记录</button>
     <button type="button" id="tabProfile" role="tab" aria-selected="false" aria-controls="panelProfile" tabindex="-1">会话资料</button>
-    <button type="button" id="tabBehavior" role="tab" aria-selected="false" aria-controls="panelBehavior" tabindex="-1">消息通知</button>
   </div>
-  <section id="panelBehavior" role="tabpanel" aria-labelledby="tabBehavior" hidden>
-    <div class="settings-section-intro"><h3>消息通知</h3><p>接收聊天提醒，不错过新消息。</p></div>
-    <p id="behaviorStatus" role="status"></p>
-    <div class="profile-actions"><button id="enablePush" type="button" class="ghost">开启消息通知</button><button id="disablePush" type="button" class="ghost">关闭本设备推送</button></div>
-  </section>
   <section id="panelProfile" role="tabpanel" aria-labelledby="tabProfile" hidden>
     <div class="settings-section-intro"><h3>会话资料</h3><p>修改名称与头像，方便在主页找到这个聊天。</p></div>
     <div class="field"><label for="profileTitle">会话名称</label><input id="profileTitle" maxlength="60" /></div>
@@ -359,6 +353,8 @@
   <section id="panelMemory" role="tabpanel" aria-labelledby="tabMemory" hidden>
     <div class="settings-section-intro"><h3>显示与记录</h3><p>管理聊天显示，角色记忆会继续保留。</p></div>
     <label class="status-toggle"><span>显示状态栏</span><input id="showCharacterStatus" type="checkbox" role="switch" checked /><span class="status-switch" aria-hidden="true"></span></label>
+    <p class="section-caption">内容分级</p>
+    <label class="status-toggle"><span>18 禁内容（仅影响「描述」）</span><input id="sAdult" type="checkbox" role="switch" /><span class="status-switch" aria-hidden="true"></span></label>
   <p class="section-caption">对话与记忆</p>
   <div class="memory-actions">
     <button id="save" type="button" class="ghost">刷新记录</button>
@@ -371,12 +367,14 @@
   <div class="field" id="personaField"><label for="sPersona">角色个性与补充设定</label><textarea id="sPersona" rows="3" maxlength="4000" placeholder="群聊和私聊共用这份角色设定"></textarea></div>
   <div class="field" id="relationshipField"><label for="sRelationship">与你的关系背景（仅该角色知道）</label><textarea id="sRelationship" rows="2" maxlength="2000"></textarea></div>
   <div class="field" id="publicPersonaField"><label for="sPublicPersona">公开性格（群聊调度可见）</label><textarea id="sPublicPersona" maxlength="1000" rows="2" placeholder="例如：话少，熟悉的话题才接话；不要填写私聊秘密"></textarea></div>
-  <div class="field" id="memoryPreferencesField"><label>群聊记忆的默认预算比例</label><label for="sGroupPublic">在群聊中（15%–85%）</label><input id="sGroupPublic" type="number" min="15" max="85" value="70" /><label for="sPrivatePublic">在私聊中（15%–85%）</label><input id="sPrivatePublic" type="number" min="15" max="85" value="30" /><p class="settings-note">其余预算给本人私聊记忆；系统再根据当前话题动态调整。</p></div>
+  <div class="field" id="memoryPreferencesField"><label for="sGroupPublic">群聊中：群聊记忆预算（15%–85%）</label><input id="sGroupPublic" type="number" min="15" max="85" value="70" /></div>
+  <div class="field"><label for="sPrivatePublic">私聊中：群聊记忆预算（15%–85%）</label><input id="sPrivatePublic" type="number" min="15" max="85" value="30" /></div>
+  <p class="settings-note">其余预算给本人私聊记忆；系统按当前话题动态调整。</p>
   <div class="field" id="groupModeField" hidden><label>群聊发言方式</label><p class="settings-note">每个角色按性格、经历和话题自行决定是否接话，不固定回复人数。</p><select id="sGroupMode" hidden><option value="natural">自主接话</option><option value="all">自主接话</option></select></div>
     <div class="dlgFoot"><button id="saveCharacter" class="primary" type="button">保存角色设定</button></div>
   </section>
   <section id="panelModel" role="tabpanel" aria-labelledby="tabModel">
-  <p id="modelPurpose" class="settings-note"></p><label style="display:flex;align-items:center;gap:10px"><input id="inheritModel" type="checkbox" style="width:auto">使用主页默认模型</label><p class="settings-note">关闭后，可单独配置这个会话；描述功能使用小婉生效的模型。</p>
+  <label class="status-toggle" for="inheritModel"><span>使用主页默认模型</span><input id="inheritModel" type="checkbox" role="switch"><span class="status-switch" aria-hidden="true"></span></label>
   <div class="section-heading"><h3>模型连接</h3><span id="modelChip" class="modelChip" title="当前生效模型">—</span></div>
   <div class="field">
     <label for="sBase">接口地址 base_url</label>
@@ -426,7 +424,7 @@
   </div>
 </div>
 
-<script src="/static/notifications.js"></script>
+
 <script>
 const conversationId = new URLSearchParams(location.search).get("conversation") || "default";
 const channel = new URLSearchParams(location.search).get('channel') || 'group';
@@ -895,11 +893,11 @@ async function openSettings(){
     document.getElementById('publicPersonaField').hidden=d.purpose==='scene';
     document.getElementById('memoryPreferencesField').hidden=d.purpose==='scene';
     document.getElementById('sPublicPersona').value=d.public_persona || '';
+    document.getElementById('sAdult').checked=Boolean(d.adult_mode);
     document.getElementById('sGroupPublic').value=Math.round((d.memory_preferences?.group_public ?? .7)*100);
     document.getElementById('sPrivatePublic').value=Math.round((d.memory_preferences?.private_public ?? .3)*100);
     document.getElementById("personaField").hidden=d.purpose === "scene";
     document.getElementById("groupModeField").hidden=d.purpose !== "scene";
-    document.getElementById("modelPurpose").textContent=d.purpose === "scene" ? "三位角色使用各自私聊模型。这里的模型用于群聊调度、场景更新和记忆摘要；描述建议使用小婉的模型。" : "此角色的模型和个性设定同时用于私聊与群聊发言。";
     document.getElementById("inheritModel").checked=Boolean(d.inherit_model);
     sBase.value = d.base_url || "";
     sModel.value = d.model || "";
@@ -924,7 +922,7 @@ async function openSettings(){
 
 function updateModelInheritance(){
  const inherited=document.getElementById('inheritModel').checked;
- [sBase,sModel,sKey,sTemp,sTokens].forEach(el=>el.disabled=inherited);
+ [sBase,sModel,sKey,sTemp,sTokens].forEach(el=>el.disabled=inherited||settingsLoading);
 }
 document.getElementById('inheritModel').onchange=updateModelInheritance;
 function settingsDraft(){
@@ -938,6 +936,7 @@ function settingsDraft(){
     group_mode: sGroupMode.value,
     public_persona:document.getElementById('sPublicPersona').value,
     memory_preferences:{group_public:Number(document.getElementById('sGroupPublic').value)/100,private_public:Number(document.getElementById('sPrivatePublic').value)/100},
+    adult_mode: document.getElementById('sAdult').checked,
     temperature: Number(sTemp.value),
     max_tokens: tokenRaw === "" ? 0 : Number(tokenRaw),
   };
@@ -971,6 +970,7 @@ function dlgStatus(msg, kind){
   const el = document.getElementById("sStatus");
   el.className = "status " + (kind || "");
   el.textContent = msg;
+  el.title = msg;
 }
 
 async function testModel(){
@@ -988,7 +988,7 @@ async function testModel(){
       dlgStatus("连不上：\n" + d.error, "err");
       return;
     }
-    dlgStatus("连接正常 · " + d.model + "\n回：" + (d.reply || "（空）"), "ok");
+    dlgStatus("连接正常 · " + d.model, "ok");
   }catch(e){
     dlgStatus("测试出错：" + e.message, "err");
   }finally{
@@ -1014,8 +1014,33 @@ saveEl.addEventListener("click",async()=>{
 
 /* Device notifications do not expose character initiative parameters. */
 document.getElementById('saveCharacter').addEventListener('click',saveSettings);
-document.getElementById('enablePush').onclick=async()=>{try{toast(await window.chatNotifications.enable(),'ok');}catch(e){toast(e.message,'error');}};
-document.getElementById('disablePush').onclick=async()=>{try{await window.chatNotifications.disable();toast('已关闭本设备后台推送','ok');}catch(e){toast(e.message,'error');}};
+
+/* Adult switch: confirm before enabling, then persist immediately so closing the dialog keeps it. */
+const sAdultEl=document.getElementById('sAdult');
+async function persistAdult(value){
+  try{
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({adult_mode:value}),signal:AbortSignal.timeout(20000)});
+    const d=await r.json();
+    if(!r.ok||d.error)throw new Error(d.error||('HTTP '+r.status));
+    return true;
+  }catch(e){toast('保存失败：'+e.message,'error');return false;}
+}
+sAdultEl.addEventListener('change',async()=>{
+  if(!sAdultEl.checked){
+    if(!await persistAdult(false))sAdultEl.checked=true;
+    else toast('已关闭 18 禁内容','ok');
+    return;
+  }
+  const ok=confirm(
+    "开启后，「描述」会生成包含色情、暴力与成人情节的候选文本。\n\n"+
+    "内容仅限成年人在私密环境中自行使用，未成年人请勿开启。\n\n"+
+    "确认开启 18 禁内容？"
+  );
+  if(!ok){sAdultEl.checked=false;toast('已保持关闭','ok');return;}
+  if(await persistAdult(true))toast('已开启 18 禁内容，描述功能立即生效','ok');
+  else sAdultEl.checked=false;
+});
 let pollingMessages=false;
 async function pollMessages(){
   if(busy||acceptingMessages||pollingMessages||clearingDisplay||document.hidden)return;
@@ -1096,5 +1121,6 @@ load().then(async()=>{
 }).catch(e=>{chatEl.style.visibility='visible';chatEl.removeAttribute('aria-busy');statusEl.textContent=e.message;});
 </script>
 <script src="/static/onboarding.js"></script>
+<script src="/static/settings-layout.js"></script>
 </body>
 </html>

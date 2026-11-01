@@ -630,6 +630,7 @@ class SettingsIn(BaseModel):
     public_persona: str | None = Field(default=None,max_length=1000)
     memory_preferences: dict[str,float] | None = None
     behavior: role_actions.Behavior | None = None
+    adult_mode: bool | None = None
 
 
 def mask_key(key: str) -> str:
@@ -692,6 +693,26 @@ def usage_report(days:int=7):
     return model_usage.report(storage.scope.get()[0],max(1,min(30,days)))
 
 
+def story_root_id() -> str:
+    world = chat_world.get()
+    return world['id'] if world else storage.scope.get()[1]
+
+
+def read_story_flag(name: str, default=False):
+    """Story-wide switches live on the root conversation so all four channels agree."""
+    user = storage.scope.get()[0]
+    try:
+        data = storage.get_store().read(user, story_root_id())
+    except Exception:
+        return default
+    return data.get(name, default)
+
+
+def write_story_flag(name: str, value) -> None:
+    user = storage.scope.get()[0]
+    storage.get_store().mutate(user, story_root_id(), lambda data: data.update({name: value}))
+
+
 @app.get("/api/settings")
 def get_settings():
     """配置文件里的值 + 实际生效的值。api_key 只给掩码。"""
@@ -713,6 +734,7 @@ def get_settings():
         "public_persona": storage.read_document('public_persona',''),
         "memory_preferences": storage.read_document('memory_preferences',{'group_public':.7,'private_public':.3}),
         "group_mode": storage.read_document('group_mode', 'natural'),
+        "adult_mode": bool(read_story_flag('adult_mode', False)),
         "purpose": "scene" if not chat_world.get() or chat_world.get()['channel'] == 'group' else "character",
         "inherit_model":not storage.read_document('model_override',False) if model_defaults.read(storage.scope.get()[0]) else not bool(storage.read_document('settings',{})),
     }
@@ -762,6 +784,8 @@ def set_settings(body: SettingsIn):
         storage.write_document('behavior',body.behavior.model_dump())
     if body.group_mode is not None:
         storage.write_document('group_mode', body.group_mode)
+    if body.adult_mode is not None:
+        write_story_flag('adult_mode', bool(body.adult_mode))
     return get_settings()
 
 
@@ -1324,6 +1348,23 @@ def update_scene_state(messages: list[dict[str, str]], force: bool = False, cfg_
 
 
 
+DESCRIBE_SAFE_SYSTEM = """你在替用户写他这一轮的动作和台词：给 3 条可直接发送的候选，风格自然、日常、不越界。
+
+【三条的差异】不要三条同一个调子：
+1. 延续当前话题，把对话往前推一步。
+2. 换一个角度：关心她、提出安排，或转到更轻松的话题。
+3. 比较直接的一条：把想说的话说清楚。
+
+【跟着用户走】顺着用户最近几轮的用词、口吻和意图继续，不改他的语气，不替他收回已经说出的话。
+
+【边界】这一档是普通聊天推荐：不写性、露骨、暴力或侮辱性的内容，不用身体部位暗示，不把对话推向亲密场景。
+如果当前对话已经进入亲密场景，写成体贴的照顾、自然的过渡或把话题带开的一句，不描写过程。
+
+【人称】固定为：「我」= 用户本人，「你」= 对面的角色。禁止用「他」「她」「小婉」当第三人称转述动作或感受。
+
+【格式】每条一句话，动作写在括号里且括号内不写「我」，后接一句直接对角色说的话。不写旁白、分析或说明。
+只输出JSON字符串数组，共3项。"""
+
 DESCRIBE_SYSTEM = """你在替用户写他这一轮的动作和台词：给3条可直接发送的候选。用户要的是色情推进，不是聊天。
 
 【三条的强度】按递进排，不要三条同一个调子：
@@ -1396,9 +1437,13 @@ async def describe(body: ChatIn):
     names = [PRIVATE_NAMES[channel]] if channel in PRIVATE_NAMES else list(PRIVATE_NAMES.values())
     cast = '、'.join(f"{name}（{DESCRIBE_CAST.get(name, '')}）" for name in names)
 
+    adult = bool(read_story_flag('adult_mode', False))
+    system = DESCRIBE_SYSTEM if adult else DESCRIBE_SAFE_SYSTEM
+    task = ("按强度递进给我 3 条下一步候选" if adult
+            else "给我 3 条不同方向的下一步候选")
     payload = [
-        {"role": "system", "content": DESCRIBE_SYSTEM},
-        {"role": "user", "content": f"{context}\n\n【在场角色】{cast}\n\n【任务】按强度递进给我 3 条下一步候选，只输出 JSON 数组。"},
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"{context}\n\n【在场角色】{cast}\n\n【任务】{task}，只输出 JSON 数组。"},
     ]
 
     client = make_client(cfg)
@@ -1406,7 +1451,8 @@ async def describe(body: ChatIn):
     last_exc: Exception | None = None
     for _ in range(2):   # 连接抖一下就重试
         try:
-            resp = await model_usage.complete(client,cfg,payload,'suggestion',temperature=1.15,max_tokens=700)
+            resp = await model_usage.complete(client,cfg,payload,'suggestion',
+                temperature=1.15 if adult else 0.9,max_tokens=700)
             raw = (resp.choices[0].message.content or "").strip()
             last_exc = None
             break

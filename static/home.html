@@ -27,6 +27,7 @@ main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;borde
 @media(max-width:700px){body{padding-bottom:64px}.app-rail{display:flex;inset:auto 0 0;width:100%;height:60px;flex-direction:row;justify-content:space-between;padding:6px 18px;border-top:1px solid #292929;border-right:0;z-index:10;padding-bottom:max(6px,env(safe-area-inset-bottom))}.rail-bottom{margin-top:0;order:-1}}
 @media(prefers-reduced-motion:reduce){.toggle:before{transition:none}}
 </style>
+<link rel="stylesheet" href="/static/settings-layout.css">
 </head>
 <body>
 <nav class="app-rail" aria-label="当前页面"><span class="rail-icon" title="会话" aria-label="会话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-4 3 2-6a8 8 0 1 1 17-5Z"/><path d="M7 10h10M7 14h6"/></svg></span><button class="rail-bottom settings-entry" id="homeSettings" aria-label="设置" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="17" r="2" fill="currentColor"/></svg></button></nav>
@@ -39,7 +40,7 @@ main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;borde
 <dialog id="homeSettingsDialog" aria-labelledby="homeSettingsTitle"><h2 id="homeSettingsTitle">设置</h2>
 <button class="quiet" id="homeModelSettings" style="width:100%;margin-bottom:20px">大模型配置</button><div id="storyChoiceField" hidden><label for="settingsStory">故事</label><select id="settingsStory"></select></div>
 <div class="setting-row"><div><label id="initiativeLabel">角色主动消息</label><p>关闭后暂停主动联系和私下交流。<br>你发消息后，她们仍会正常回复。</p></div><button class="toggle" id="initiativeToggle" role="switch" aria-checked="false" aria-labelledby="initiativeLabel" disabled></button></div>
-<div class="danger-zone"><h3>重置聊天</h3><p>清除群聊、三人私聊、角色间私聊和全部记忆，回到第一天清晨。保留头像和模型设置。</p><button class="danger" id="resetStory">重置聊天记录</button></div>
+<div class="danger-zone"><h3>重置聊天</h3></div><p>清除所有聊天和记忆，回到第一天清晨。保留头像与模型设置。</p><div><button class="danger" id="resetStory">重置聊天记录</button></div>
 <p id="homeSettingsStatus" role="status" aria-live="polite"></p><div class="actions"><button class="quiet" id="closeHomeSettings">关闭</button></div></dialog>
 <dialog id="resetConfirm" aria-labelledby="resetTitle"><h2 id="resetTitle">重回第一天清晨？</h2><p>四个会话的聊天和记忆都会删除，包括角色之间的私聊。<strong>不创建备份，无法撤销。</strong></p><p id="resetStatus" role="status"></p><div class="actions"><button class="quiet" id="cancelReset">取消</button><button class="danger" id="confirmReset" style="margin-top:0">删除并重置</button></div></dialog>
 <script src="/static/notifications.js"></script>
@@ -98,10 +99,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadStorie
 window.addEventListener('pageshow',event=>{if(event.persisted)loadStories();});
 window.addEventListener('storage',event=>{if(event.key==='companion-read-changed')loadStories();});
 const notify=document.getElementById('notifications');
-notify.onclick=async()=>{
-  try{status.textContent=await window.chatNotifications.enable();notify.textContent='通知已开启';}
-  catch(e){status.textContent=e.message;}
-};
+window.chatNotifications.bind(notify,status);
 if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',event=>{if(event.data?.type==='new-message')loadStories();});
 
 const homeSettingsDialog=document.getElementById('homeSettingsDialog'),initiativeToggle=document.getElementById('initiativeToggle'),homeSettingsStatus=document.getElementById('homeSettingsStatus'),settingsStory=document.getElementById('settingsStory');
@@ -145,6 +143,7 @@ document.getElementById('confirmReset').onclick=async()=>{
  }catch(e){resetStatus.textContent=e.message;}finally{button.disabled=false;document.getElementById('cancelReset').disabled=false;}
 };
 </script>
+<script src="/static/settings-layout.js"></script>
 <script src="/static/global-model.js"></script>
 <script src="/static/onboarding.js"></script>
 </body>
