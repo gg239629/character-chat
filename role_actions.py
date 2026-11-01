@@ -15,6 +15,9 @@ import actors
 import chat_history
 import storage
 import model_usage
+import model_json
+
+_NO_JSON_MODE=set()
 
 
 class Behavior(BaseModel):
@@ -125,24 +128,23 @@ async def ask_json(cfg, system, context):
     client=server.make_client(cfg)
     try:
         with model_usage.Measure(kind,cfg,messages) as metric:
-            response=await client.chat.completions.create(model=cfg['model'],temperature=.3,
-                max_tokens=120 if kind=='coordinator' else 1800 if kind=='archive' else 900,messages=messages)
+            options={'model':cfg['model'],'temperature':.3,'max_tokens':120 if kind=='coordinator' else 1800 if kind=='archive' else 900,
+                'messages':messages}
+            capability=(cfg.get('base_url',''),cfg['model'])
+            if capability not in _NO_JSON_MODE:options['response_format']={'type':'json_object'}
+            try:response=await client.chat.completions.create(**options)
+            except Exception as error:
+                if getattr(error,'status_code',None) in (400,422) and any(s in str(error).lower() for s in ('response_format','json_object','json mode','json_mode')):
+                    if len(_NO_JSON_MODE)>128:_NO_JSON_MODE.clear()
+                    _NO_JSON_MODE.add(capability);options.pop('response_format',None)
+                    response=await client.chat.completions.create(**options)
+                else:raise
             metric.observe(response)
             raw=(response.choices[0].message.content or '').strip()
             metric.output(raw)
-        if raw.startswith('```'):
-            raw=raw.split('\n',1)[-1].rsplit('```',1)[0]
-        try:
-            value=json.loads(raw)
-        except json.JSONDecodeError:
-            # Some compatible providers add prose around an otherwise valid object.
-            # raw_decode still rejects truncated JSON; never guess missing content.
-            start=raw.find('{')
-            if start<0:raise
-            value,_=json.JSONDecoder().raw_decode(raw[start:])
-        if not isinstance(value,dict):
-            raise ValueError('Invalid role decision')
-        return value
+            if getattr(response.choices[0],'finish_reason',None)=='length':
+                raise model_json.ModelOutputTruncated('JSON response reached output limit')
+            return model_json.decode(raw)
     finally:
         await client.close()
 

@@ -31,8 +31,15 @@ def record(user,world,task,stage,error,attempts=0,elapsed_ms=0):
 def report(user,world):
     storage.get_store().read(user,world)
     with Session(storage.get_store().engine) as db:
-        return [{'task_id':r.task_id,'stage':r.stage,'error_type':r.error_type,'created_at':r.created_at,'attempts':r.attempts,'elapsed_ms':r.elapsed_ms} for r in db.scalars(
-            select(Failure).where(Failure.user_id==user,Failure.world_id==world).order_by(Failure.created_at.desc()).limit(30))]
+        rows=list(db.scalars(select(Failure).where(Failure.user_id==user,Failure.world_id==world).order_by(Failure.created_at.desc()).limit(30)))
+        import peer_chat,chat_inbox,maintenance,role_actions
+        ids={r.task_id for r in rows};states={}
+        for model in (peer_chat.Job,chat_inbox.Turn,maintenance.Job,role_actions.Action):
+            if ids:
+                states.update({r.id:r.status for r in db.scalars(select(model).where(model.id.in_(ids),model.user_id==user,model.world_id==world))})
+        return [{'task_id':r.task_id,'stage':r.stage,'error_type':r.error_type,'created_at':r.created_at,
+            'attempts':r.attempts,'elapsed_ms':r.elapsed_ms,
+            'status':states.get(r.task_id,'unavailable') if r.stage not in ('notification','action_event','peer_event') else 'unavailable'} for r in rows]
 
 
 def retry(user,world,stage,identity):
