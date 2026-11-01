@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>我的故事</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:#101010;color:#eee}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}button:disabled{cursor:wait;opacity:.5}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #bbb;outline-offset:4px}header{height:76px;border-bottom:1px solid #292929;display:flex;justify-content:space-between;align-items:center;padding:0 max(24px,calc((100vw - 1000px)/2))}header span{font-size:15px;color:#bbb}.quiet{border:1px solid #393939;background:transparent;color:#ccc;border-radius:8px;min-height:44px;padding:0 16px}main{max-width:1048px;margin:64px auto;padding:0 24px}.heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:32px}h1{font-size:28px;letter-spacing:-1px;font-weight:600;margin:0 0 12px}p{color:#999;font-size:14px;line-height:1.7;margin:0}.primary{background:#e5e5e5;color:#161616;border:0;border-radius:8px;min-height:44px;padding:0 18px;white-space:nowrap}#stories{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.story{display:flex;flex-direction:column;gap:32px;min-height:180px;border:1px solid #333;background:#181818;border-radius:12px;padding:24px;text-decoration:none;color:inherit}.story:hover{border-color:#777;background:#1e1e1e}.story strong{font-size:18px;font-weight:500;overflow-wrap:anywhere}.story span{font-size:13px;color:#999}.story footer{margin-top:auto;display:flex;justify-content:space-between;color:#ccc;font-size:13px}.placeholder{margin-top:28px;padding:20px 0;border-top:1px solid #292929;font-size:13px;color:#777}dialog{background:#1b1b1b;color:#eee;border:1px solid #444;border-radius:14px;padding:28px;width:min(420px,calc(100% - 32px))}dialog::backdrop{background:#000a}h2{font-size:20px;margin:0 0 20px}label{display:block;font-size:14px;margin-bottom:10px}input{width:100%;padding:12px;background:#111;border:1px solid #444;border-radius:8px;color:#eee}form p{margin-top:12px}.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}#status{min-height:24px;margin-bottom:16px;color:#aaa;font-size:14px}@media(max-width:700px){main{margin-top:36px}#stories{grid-template-columns:repeat(2,minmax(0,1fr))}.story{padding:18px}.heading{align-items:flex-start}h1{font-size:24px}}@media(max-width:430px){#stories{grid-template-columns:1fr}.story{min-height:145px;gap:18px}main{padding:0 18px}header{padding:0 18px}.heading{gap:12px}}
+/* Conversation list, matching the dark chat surfaces. */
+html,body{height:100%;background:#111}body{padding-left:64px}
+.app-rail{position:fixed;inset:0 auto 0 0;width:64px;background:#202020;border-right:1px solid #292929;display:flex;flex-direction:column;align-items:center;padding:24px 0;gap:24px}
+.rail-icon{width:40px;height:44px;display:flex;align-items:center;justify-content:center;color:#07c160}.rail-icon svg{width:25px;height:25px}.rail-bottom{margin-top:auto;color:#888}
+header{height:64px;background:#191919;padding:0 24px;border-bottom:1px solid #292929}header span{font-size:17px;color:#eee;font-weight:500}.quiet{border-radius:4px;background:transparent}
+main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;border-right:1px solid #242424;min-height:calc(100dvh - 64px);background:#151515}
+.heading{margin:0;padding:24px;align-items:center;border-bottom:1px solid #292929}.heading h1{font-size:18px;letter-spacing:0;margin:0;font-weight:500}.heading p{display:none}.primary{background:#07c160;color:#fff;border-radius:4px;font-size:14px}.primary:hover{background:#06ad56}
+#status{margin:0;padding:0 24px;line-height:44px;min-height:0}#status:empty{display:none}#stories{display:flex;flex-direction:column;gap:0}
+.story{position:relative;min-height:94px;border:0;border-bottom:1px solid #292929;border-radius:0;background:transparent;padding:22px 70px 20px 90px;gap:7px}.story:hover{background:#252525;border-color:#292929}
+.story-avatar{position:absolute;left:24px;top:22px;width:48px;height:48px;border-radius:5px;display:flex;align-items:center;justify-content:center;background:#41534a;color:#dce8df;font-size:20px}
+ .story-avatar img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.story:nth-child(3n+2) .story-avatar{background:#4c505c}.story:nth-child(3n) .story-avatar{background:#5b4b48}
+.story strong{font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.story>span{font-size:13px;color:#888}.story footer{position:absolute;right:24px;top:38px;font-size:18px;color:#666;margin:0}.story footer span{font-size:18px}
+.placeholder{margin:0;padding:24px;text-align:center;border:0;color:#666;font-size:12px}dialog{border-radius:8px;background:#202020}input{border-radius:4px}
+@media(max-width:700px){body{padding-left:0}.app-rail{display:none}header{height:56px;padding:0 16px}main{margin:0;min-height:calc(100dvh - 56px);border:0}.heading{padding:18px 16px}.heading h1{font-size:17px}.story{padding-left:78px;min-height:88px}.story-avatar{left:16px;top:20px;width:46px;height:46px}.story footer{right:18px}.heading .primary{padding:0 12px}}
+ .story>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.story strong{padding-right:38px}.message-time{position:absolute;right:24px;top:18px;font-size:11px;color:#777}.unread-badge{position:absolute;right:-7px;top:-7px;min-width:18px;height:18px;border-radius:12px;background:#e34b48;color:#fff;font-size:11px;line-height:18px;text-align:center;padding:0 4px;font-weight:500}.story-avatar{overflow:visible}
+
+.settings-entry{border:0;background:transparent;width:44px;height:44px;display:grid;place-items:center;border-radius:6px;color:#aaa}.settings-entry:hover{background:#303030;color:#eee}.settings-entry svg{width:24px;height:24px}
+#homeSettingsDialog{width:min(460px,calc(100% - 32px));padding:24px}#homeSettingsDialog h2{margin-bottom:24px}.setting-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 0;border-bottom:1px solid #383838}.setting-row label{margin:0 0 6px;font-size:16px}.setting-row p{font-size:13px;color:#aaa}.toggle{flex:none;width:48px;height:44px;border:0;background:transparent;padding:0;position:relative}.toggle:after{content:"";position:absolute;inset:8px 0;background:#555;border-radius:16px}.toggle:before{content:'';position:absolute;z-index:1;left:4px;top:12px;width:20px;height:20px;background:#eee;border-radius:50%;transition:transform .15s}.toggle[aria-checked="true"]:after{background:#07c160}.toggle[aria-checked="true"]:before{transform:translateX(20px)}.danger-zone{margin-top:28px}.danger-zone h3{font-size:15px;font-weight:500;margin:0 0 8px}.danger{border:1px solid #944b4b;color:#ffaaaa;background:transparent;min-height:44px;border-radius:5px;padding:0 16px;margin-top:16px}.danger:hover{background:#392323}#homeSettingsStatus{min-height:22px;font-size:13px;margin-top:16px;color:#bbb}#resetConfirm{width:min(420px,calc(100% - 32px))}#resetConfirm strong{color:#ffb0b0}select{width:100%;background:#181818;color:#eee;border:1px solid #444;padding:10px;border-radius:4px}#storyChoiceField{margin-bottom:12px}
+@media(max-width:700px){body{padding-bottom:64px}.app-rail{display:flex;inset:auto 0 0;width:100%;height:60px;flex-direction:row;justify-content:space-between;padding:6px 18px;border-top:1px solid #292929;border-right:0;z-index:10;padding-bottom:max(6px,env(safe-area-inset-bottom))}.rail-bottom{margin-top:0;order:-1}}
+@media(prefers-reduced-motion:reduce){.toggle:before{transition:none}}
+</style>
+</head>
+<body>
+<nav class="app-rail" aria-label="当前页面"><span class="rail-icon" title="会话" aria-label="会话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 11a8 8 0 0 1-8 8H5l-4 3 2-6a8 8 0 1 1 17-5Z"/><path d="M7 10h10M7 14h6"/></svg></span><button class="rail-bottom settings-entry" id="homeSettings" aria-label="设置" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2" fill="currentColor"/><circle cx="16" cy="12" r="2" fill="currentColor"/><circle cx="10" cy="17" r="2" fill="currentColor"/></svg></button></nav>
+<header><span>会话</span><div><button class="quiet" id="notifications">开启通知</button> <button class="quiet" id="account">登录 / 注册</button></div></header>
+<main>
+<div class="heading"><h1>我的会话</h1></div>
+<div id="status" role="status"></div><div id="stories" aria-label="独立故事列表"></div>
+</main>
+<dialog id="accountDialog"><h2>账号</h2><p id="accountHint">正在读取账号状态…</p><form id="accountForm" hidden><label for="accountName">用户名</label><input id="accountName" autocomplete="username" maxlength="40" required><label for="accountPassword" style="margin-top:16px">密码</label><input id="accountPassword" type="password" autocomplete="current-password" maxlength="128" required><div class="actions"><button class="quiet" type="button" id="registerAccount">注册</button><button class="primary" type="submit">登录</button></div></form><button class="quiet" id="logoutAccount" hidden>退出登录</button><div class="actions"><button class="quiet" id="closeAccount">关闭</button></div></dialog>
+<dialog id="homeSettingsDialog" aria-labelledby="homeSettingsTitle"><h2 id="homeSettingsTitle">设置</h2>
+<div id="storyChoiceField" hidden><label for="settingsStory">故事</label><select id="settingsStory"></select></div>
+<div class="setting-row"><div><label id="initiativeLabel">角色主动消息</label><p>关闭后暂停主动联系和私下交流。<br>你发消息后，她们仍会正常回复。</p></div><button class="toggle" id="initiativeToggle" role="switch" aria-checked="false" aria-labelledby="initiativeLabel" disabled></button></div>
+<div class="danger-zone"><h3>重置聊天</h3><p>清除群聊、三人私聊、角色间私聊和全部记忆，回到第一天清晨。保留头像和模型设置。</p><button class="danger" id="resetStory">重置聊天记录</button></div>
+<p id="homeSettingsStatus" role="status" aria-live="polite"></p><div class="actions"><button class="quiet" id="closeHomeSettings">关闭</button></div></dialog>
+<dialog id="resetConfirm" aria-labelledby="resetTitle"><h2 id="resetTitle">重回第一天清晨？</h2><p>四个会话的聊天和记忆都会删除，包括角色之间的私聊。<strong>不创建备份，无法撤销。</strong></p><p id="resetStatus" role="status"></p><div class="actions"><button class="quiet" id="cancelReset">取消</button><button class="danger" id="confirmReset" style="margin-top:0">删除并重置</button></div></dialog>
+<script src="/static/notifications.js"></script>
+<script>
+const list=document.getElementById('stories'), status=document.getElementById('status');
+let availableStories=[];
+const notified=new Map();let initialized=false;let loading=false;let refreshAgain=false;
+async function loadStories(){
+  if(loading){refreshAgain=true;return;}loading=true;
+  if(!initialized)status.textContent='正在读取会话…';
+  try{
+    const r=await fetch('/api/conversations',{cache:'no-store'});if(!r.ok)throw Error('读取失败，请刷新重试');
+    const stories=await r.json();availableStories=stories;list.replaceChildren();
+    for(const story of stories){
+     for(const [channel,name] of [['group','大家一起'],['wan','小婉'],['yan','小研'],['liu','小柳']]){
+      const profile=story.channels?.[channel] || {};
+      const activity=story.activity?.[channel] || {};
+      const displayName=profile.title || (channel==='group' ? story.title : name);
+      const link=document.createElement('a');link.className='story';link.href='/chat?conversation='+encodeURIComponent(story.id)+'&channel='+channel;
+      const title=document.createElement('strong');title.textContent=channel==='group' && story.id==='default' && story.title==='原有故事' ? '大家一起' : displayName;
+      const note=document.createElement('span');note.textContent='';
+      if(activity.preview)note.textContent=activity.preview.replace(/\s+/g,' ');
+      const stamp=document.createElement('time');stamp.className='message-time';
+      if(activity.updated_at){stamp.dateTime=new Date(activity.updated_at*1000).toISOString();stamp.textContent=new Date(activity.updated_at*1000).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});}
+      const footer=document.createElement('footer');footer.textContent='继续故事';const arrow=document.createElement('span');arrow.textContent='↗';arrow.setAttribute('aria-hidden','true');footer.append(arrow);
+      const avatar=document.createElement('div');avatar.className='story-avatar';avatar.textContent=channel==='group'?'群':name.slice(1);avatar.setAttribute('aria-hidden','true');
+      const avatarUrl=channel==='group'?story.avatar:profile.avatar;
+      if(avatarUrl){const image=document.createElement('img');image.src=avatarUrl;image.alt='';avatar.replaceChildren(image);}
+      footer.replaceChildren(arrow);arrow.textContent='›';
+      if(activity.unread){const badge=document.createElement('b');badge.className='unread-badge';badge.textContent=activity.unread>99?'99+':activity.unread;avatar.append(badge);link.setAttribute('aria-label',title.textContent+'，'+activity.unread+'条未读消息');}
+      const key=story.id+':'+channel;
+      if(initialized && activity.unread && activity.incoming_at>(notified.get(key)||0)){
+        if(document.hidden && 'Notification' in window && Notification.permission==='granted' && localStorage.getItem('companion-notifications-disabled')!=='true' && localStorage.getItem('companion-web-push')!=='enabled'){
+          const notification=new Notification(title.textContent,{body:'你收到了一条新消息',tag:key});notification.onclick=()=>{window.focus();location.href=link.href;};
+        }
+      }
+      notified.set(key,Math.max(notified.get(key)||0,activity.incoming_at||0));
+      link.dataset.updated=activity.updated_at||0;
+      link.append(avatar,title,note,stamp,footer);list.append(link);
+     }
+    }
+    status.textContent=stories.length?'':'暂无会话，请刷新重试。';
+    [...list.children].sort((a,b)=>Number(b.dataset.updated)-Number(a.dataset.updated)).forEach(item=>list.append(item));
+    const unread=stories.reduce((sum,story)=>sum+Object.values(story.activity||{}).reduce((n,a)=>n+(a.unread||0),0),0);
+    document.title=unread?'('+unread+') 会话':'会话';initialized=true;
+  }catch(e){status.textContent=e.message;}finally{loading=false;if(refreshAgain){refreshAgain=false;loadStories();}}
+}
+const account=document.getElementById('accountDialog');document.getElementById('account').onclick=async()=>{account.showModal();const r=await fetch('/api/auth/status');const d=await r.json();document.getElementById('accountForm').hidden=!d.enabled||d.logged_in;document.getElementById('logoutAccount').hidden=!d.logged_in;document.getElementById('accountHint').textContent=d.enabled?(d.logged_in?'当前已登录':'登录后进入自己的独立聊天空间。'):'当前为个人空间，账号功能尚未启用。';};document.getElementById('closeAccount').onclick=()=>account.close();
+document.getElementById('accountForm').onsubmit=async event=>{event.preventDefault();await submitAccount('login');};
+document.getElementById('registerAccount').onclick=()=>submitAccount('register');
+async function submitAccount(action){try{const r=await fetch('/api/auth/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('accountName').value,password:document.getElementById('accountPassword').value})});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'请检查用户名和密码');if(action==='login')location.reload();else document.getElementById('accountHint').textContent='注册成功，请登录。';}catch(e){document.getElementById('accountHint').textContent=e.message;}}
+document.getElementById('logoutAccount').onclick=async()=>{await fetch('/api/auth/logout',{method:'POST'});location.reload();};
+loadStories();
+setInterval(loadStories,10000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadStories();});
+window.addEventListener('pageshow',event=>{if(event.persisted)loadStories();});
+window.addEventListener('storage',event=>{if(event.key==='companion-read-changed')loadStories();});
+const notify=document.getElementById('notifications');
+notify.onclick=async()=>{
+  try{status.textContent=await window.chatNotifications.enable();notify.textContent='通知已开启';}
+  catch(e){status.textContent=e.message;}
+};
+if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',event=>{if(event.data?.type==='new-message')loadStories();});
+
+const homeSettingsDialog=document.getElementById('homeSettingsDialog'),initiativeToggle=document.getElementById('initiativeToggle'),homeSettingsStatus=document.getElementById('homeSettingsStatus'),settingsStory=document.getElementById('settingsStory');
+const resetDialog=document.getElementById('resetConfirm'),resetStatus=document.getElementById('resetStatus');
+function settingsHeaders(){return {'Content-Type':'application/json','X-Conversation-ID':settingsStory.value||'default'};}
+async function readHomeSettings(){
+ initiativeToggle.disabled=true;homeSettingsStatus.textContent='正在读取…';
+ try{const r=await fetch('/api/home/settings',{headers:settingsHeaders(),cache:'no-store'});if(!r.ok)throw Error('读取失败，请重试');const d=await r.json();initiativeToggle.setAttribute('aria-checked',String(d.initiative_enabled));homeSettingsStatus.textContent='';initiativeToggle.disabled=false;}
+ catch(e){homeSettingsStatus.textContent=e.message;}
+}
+document.getElementById('homeSettings').onclick=async()=>{
+ homeSettingsDialog.showModal();
+ if(!availableStories.length)await loadStories();
+ settingsStory.replaceChildren();for(const story of availableStories){const option=document.createElement('option');option.value=story.id;option.textContent=story.title==='原有故事'?'当前故事':story.title;settingsStory.append(option);}
+ document.getElementById('storyChoiceField').hidden=availableStories.length<=1;
+ await readHomeSettings();
+ try{const r=await fetch('/api/home/task-health',{headers:settingsHeaders(),cache:'no-store'});if(r.ok){const d=await r.json();if(d.failures?.length)homeSettingsStatus.textContent='最近后台异常：'+d.failures[0].stage+' · '+d.failures[0].error_type+' · 第'+(d.failures[0].attempts||0)+'次 · '+((d.failures[0].elapsed_ms||0)/1000).toFixed(1)+'秒';
+const failure=d.failures[0];if(failure?.task_id){const retry=document.createElement('button');retry.className='quiet';retry.textContent='重试失败任务';retry.style.marginTop='12px';retry.onclick=async()=>{retry.disabled=true;try{const r=await fetch('/api/home/tasks/'+encodeURIComponent(failure.stage)+'/'+encodeURIComponent(failure.task_id)+'/retry',{method:'POST',headers:settingsHeaders()});const result=await r.json();if(!r.ok)throw Error(result.detail||'重试失败');homeSettingsStatus.textContent='已重新排队';}catch(e){homeSettingsStatus.textContent=e.message;}};homeSettingsStatus.append(document.createElement('br'),retry);}
+}}catch{}
+};
+settingsStory.onchange=readHomeSettings;
+document.getElementById('closeHomeSettings').onclick=()=>homeSettingsDialog.close();
+initiativeToggle.onclick=async()=>{
+ const next=initiativeToggle.getAttribute('aria-checked')!=='true';initiativeToggle.disabled=true;homeSettingsStatus.textContent='正在保存…';
+ try{const r=await fetch('/api/home/settings',{method:'PUT',headers:settingsHeaders(),body:JSON.stringify({initiative_enabled:next})});if(!r.ok)throw Error('保存失败，请重试');const d=await r.json();initiativeToggle.setAttribute('aria-checked',String(d.initiative_enabled));homeSettingsStatus.textContent=d.initiative_enabled?'主动消息已开启':'主动消息已关闭';}
+ catch(e){homeSettingsStatus.textContent=e.message;}finally{initiativeToggle.disabled=false;}
+};
+document.getElementById('resetStory').onclick=()=>{resetStatus.textContent='';resetDialog.showModal();};
+document.getElementById('cancelReset').onclick=()=>resetDialog.close();
+document.getElementById('confirmReset').onclick=async()=>{
+ const button=document.getElementById('confirmReset');button.disabled=true;document.getElementById('cancelReset').disabled=true;resetStatus.textContent='正在重置…';
+ try{const r=await fetch('/api/home/reset',{method:'POST',headers:settingsHeaders(),body:JSON.stringify({confirm:true})});const d=await r.json();if(!r.ok)throw Error(d.detail||'重置失败，请重试');
+  for(const channel of ['group','wan','yan','liu']){
+   const suffix=(settingsStory.value==='default'?'':':'+settingsStory.value)+(channel==='group'?'':':private:'+channel);
+   const key='companion-chat-v1'+suffix;
+   localStorage.removeItem(key);localStorage.removeItem('companion-chat-saved'+suffix);
+   localStorage.removeItem(key+':hidden-before');localStorage.setItem(key+':db-migrated','true');
+  }
+  localStorage.setItem('companion-read-changed',String(Date.now()));
+  notified.clear();resetDialog.close();homeSettingsStatus.textContent='已重置，回到第一天早晨 08:00';await loadStories();
+ }catch(e){resetStatus.textContent=e.message;}finally{button.disabled=false;document.getElementById('cancelReset').disabled=false;}
+};
+</script>
+</body>
+</html>

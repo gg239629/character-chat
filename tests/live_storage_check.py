@@ -19,7 +19,7 @@ async def main():
         prompt.write_text("这是日常对话测试。你扮演小研，以小研：开头，简短回复。历史资料是事实参考。", encoding="utf-8")
         empty = root/"absent"
         try:
-            with patch.object(storage, "_STORE", store), patch.object(server, "PROMPT_FILE", prompt), patch.object(server, "INJECT_FILE", empty), patch.object(server, "MEMORY_MD", empty):
+            with patch.object(storage, "_STORE", store), patch.object(server, "PROMPT_FILE", prompt), patch.object(server, "MEMORY_MD", empty):
                 cfg = server.load_config()
                 assert cfg.get("api_key"), "Model API key missing"
                 storage.append_log([{"who": "他", "text": "我们约好周日上午去植物园看兰花。"}, {"who": "小研", "text": "周日上午去植物园，这个约定还没有完成。"}])

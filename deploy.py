@@ -12,6 +12,10 @@ async def require_password(request, call_next):
     from fastapi.responses import Response
     if request.url.path == "/healthz":
         return Response("ok", media_type="text/plain")
+    if request.url.path=='/api/jobs/tick':
+        token=os.getenv('ROLE_CRON_TOKEN','')
+        if len(token)>=32 and secrets.compare_digest(request.headers.get('authorization',''),'Bearer '+token):
+            return await call_next(request)
     expected_user = os.getenv("APP_USERNAME", "owner")
     expected_password = os.environ["APP_PASSWORD"]
     valid = False

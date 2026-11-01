@@ -86,7 +86,17 @@ class Store:
 
     def conversations(self, user):
         with Session(self.engine) as db:
-            return [{"id": row.id} for row in db.scalars(select(Conversation).where(Conversation.user_id == user))]
+            rows = list(db.scalars(select(Conversation).where(Conversation.user_id == user)))
+            result = []
+            for row in rows:
+                if row.data.get("world_id"):
+                    continue
+                item = {"id": row.id, "title": row.data.get("title") or ("原有故事" if row.id == "default" else "未命名故事"), "avatar": row.data.get("avatar", "")}
+                channels = {child.data["channel"]: {"title": child.data.get("title", ""), "avatar": child.data.get("avatar", "")} for child in rows if child.data.get("world_id") == row.id}
+                if channels:
+                    item["channels"] = channels
+                result.append(item)
+            return result
 
 _STORE = None
 
@@ -182,7 +192,11 @@ def ensure_policy():
     current_data()
 
 def read_document(name, default):
-    return current_data().get(name, default)
+    data=current_data()
+    if name=='recent_log':
+        import memory_autosave
+        data=memory_autosave.effective(data)
+    return data.get(name, default)
 
 def write_document(name, value):
     def change(data):
@@ -192,6 +206,8 @@ def write_document(name, value):
 
 def memory_pack():
     data = current_data()
+    import memory_autosave
+    data=memory_autosave.effective(data)
     return {"scene_state": data.get("scene_state", {}), "recent_log": data.get("recent_log", [])}
 
 def append_log(items):

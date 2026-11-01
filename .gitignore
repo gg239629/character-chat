@@ -14,3 +14,5 @@ memory/long_term/
 data/
 *.db
 *.db-*
+# Isolated test databases
+.test-tmp/

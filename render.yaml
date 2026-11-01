@@ -17,3 +17,15 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: APP_ENCRYPTION_KEY
+        sync: false
+      - key: RUN_MAINTENANCE_WORKER
+        value: "true"
+      - key: RUN_ROLE_SCHEDULER
+        value: "true"
+      - key: ROLE_CRON_TOKEN
+        generateValue: true
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@example.com
