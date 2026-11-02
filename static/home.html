@@ -47,13 +47,16 @@ main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;borde
 <script>
 const list=document.getElementById('stories'), status=document.getElementById('status');
 let availableStories=[];
-const notified=new Map();let initialized=false;let loading=false;let refreshAgain=false;
+const notified=new Map();let initialized=false;let loading=false;let refreshAgain=false;let storySignature="";
 async function loadStories(){
   if(loading){refreshAgain=true;return;}loading=true;
   if(!initialized)status.textContent='正在读取会话…';
   try{
-    const r=await fetch('/api/conversations',{cache:'no-store'});if(!r.ok)throw Error('读取失败，请刷新重试');
-    const stories=await r.json();availableStories=stories;list.replaceChildren();
+    const r=await fetch('/api/conversations',{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('读取失败，请刷新重试');
+    const stories=await r.json();availableStories=stories;
+    const signature=JSON.stringify(stories);
+    if(initialized && signature===storySignature){status.textContent=stories.length?'':'暂无会话，请刷新重试。';return;}
+    list.replaceChildren();
     for(const story of stories){
      for(const [channel,name] of [['group','大家一起'],['wan','小婉'],['yan','小研'],['liu','小柳']]){
       const profile=story.channels?.[channel] || {};
@@ -85,7 +88,7 @@ async function loadStories(){
     status.textContent=stories.length?'':'暂无会话，请刷新重试。';
     [...list.children].sort((a,b)=>Number(b.dataset.updated)-Number(a.dataset.updated)).forEach(item=>list.append(item));
     const unread=stories.reduce((sum,story)=>sum+Object.values(story.activity||{}).reduce((n,a)=>n+(a.unread||0),0),0);
-    document.title=unread?'('+unread+') 会话':'会话';initialized=true;
+    document.title=unread?'('+unread+') 会话':'会话';storySignature=signature;initialized=true;
   }catch(e){status.textContent=e.message;}finally{loading=false;if(refreshAgain){refreshAgain=false;loadStories();}}
 }
 const account=document.getElementById('accountDialog');document.getElementById('account').onclick=async()=>{account.showModal();const r=await fetch('/api/auth/status');const d=await r.json();document.getElementById('accountForm').hidden=!d.enabled||d.logged_in;document.getElementById('logoutAccount').hidden=!d.logged_in;document.getElementById('accountHint').textContent=d.enabled?(d.logged_in?'当前已登录':'登录后进入自己的独立聊天空间。'):'当前为个人空间，账号功能尚未启用。';};document.getElementById('closeAccount').onclick=()=>account.close();

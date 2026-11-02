@@ -354,7 +354,7 @@
     <div class="settings-section-intro"><h3>显示与记录</h3><p>管理聊天显示，角色记忆会继续保留。</p></div>
     <label class="status-toggle"><span>显示状态栏</span><input id="showCharacterStatus" type="checkbox" role="switch" checked /><span class="status-switch" aria-hidden="true"></span></label>
     <p class="section-caption">内容分级</p>
-    <label class="status-toggle"><span>18 禁内容（仅影响「描述」）</span><input id="sAdult" type="checkbox" role="switch" /><span class="status-switch" aria-hidden="true"></span></label>
+    <label class="status-toggle"><span>18+内容（仅影响「描述」）</span><input id="sAdult" type="checkbox" role="switch" /><span class="status-switch" aria-hidden="true"></span></label>
   <p class="section-caption">对话与记忆</p>
   <div class="memory-actions">
     <button id="save" type="button" class="ghost">刷新记录</button>
@@ -800,7 +800,7 @@ async function refreshModel(){
   if (modelRefreshPending || document.hidden) return;
   modelRefreshPending = true;
   try{
-    const r = await fetch("/api/info?details=false", {cache:"no-store"});
+    const r = await fetch("/api/info?details=false", {cache:"no-store",signal:AbortSignal.timeout(12000)});
     if (!r.ok) throw new Error("状态读取失败");
     const d = await r.json();
     renderCharacterStatus(d.scene_state);
@@ -824,7 +824,7 @@ let sceneRefreshPending=false;
 async function refreshScene(){
  if(document.hidden||sceneRefreshPending||!statusToggle.checked)return;
  sceneRefreshPending=true;
- try{const r=await fetch('/api/scene',{cache:'no-store'});if(r.ok){const d=await r.json();renderCharacterStatus(d.scene_state);}}catch{}
+ try{const r=await fetch('/api/scene',{cache:'no-store',signal:AbortSignal.timeout(12000)});if(r.ok){const d=await r.json();renderCharacterStatus(d.scene_state);}}catch{}
  finally{sceneRefreshPending=false;}
 }
 modelTimer = setInterval(refreshScene,5000);
@@ -1029,16 +1029,16 @@ async function persistAdult(value){
 sAdultEl.addEventListener('change',async()=>{
   if(!sAdultEl.checked){
     if(!await persistAdult(false))sAdultEl.checked=true;
-    else toast('已关闭 18 禁内容','ok');
+    else toast('已关闭 18+内容','ok');
     return;
   }
   const ok=confirm(
     "开启后，「描述」会生成包含色情、暴力与成人情节的候选文本。\n\n"+
     "内容仅限成年人在私密环境中自行使用，未成年人请勿开启。\n\n"+
-    "确认开启 18 禁内容？"
+    "确认开启 18+内容？"
   );
   if(!ok){sAdultEl.checked=false;toast('已保持关闭','ok');return;}
-  if(await persistAdult(true))toast('已开启 18 禁内容，描述功能立即生效','ok');
+  if(await persistAdult(true))toast('已开启 18+内容，描述功能立即生效','ok');
   else sAdultEl.checked=false;
 });
 let pollingMessages=false;
@@ -1047,7 +1047,7 @@ async function pollMessages(){
   const epoch=displayEpoch;
   pollingMessages=true;
   try{
-    const response=await fetch('/api/messages'+(latestMessage?.id?'?incremental=true&after='+encodeURIComponent(latestMessage.id):''),{cache:'no-store'});if(!response.ok)return;
+    const response=await fetch('/api/messages'+(latestMessage?.id?'?incremental=true&after='+encodeURIComponent(latestMessage.id):''),{cache:'no-store',signal:AbortSignal.timeout(12000)});if(!response.ok)return;
     const data=await response.json();
     if(busy || acceptingMessages || clearingDisplay || epoch!==displayEpoch)return;
     if(data.unchanged)return;

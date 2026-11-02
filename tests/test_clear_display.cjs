@@ -9,7 +9,7 @@ const load=source.slice(source.indexOf('async function load(recoverBrowser=true)
   let clearHandler,resolvePoll,afterClear=false,imports=0;
   const button={disabled:false,addEventListener:(name,fn)=>{clearHandler=fn;}};
   const values=new Map(),errors=[];
-  const ctx={STORE_KEY:'cache:'+channel,SAVED_KEY:'saved:'+channel,history:[],savedCount:0,busy:false,acceptingMessages:0,
+  const ctx={AbortSignal,STORE_KEY:'cache:'+channel,SAVED_KEY:'saved:'+channel,history:[],savedCount:0,busy:false,acceptingMessages:0,
    document:{hidden:false,getElementById:()=>button},chatEl:{scrollTop:100,scrollHeight:500,clientHeight:400},
    localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
    render(){},confirm:()=>true,toast:(text,type)=>{if(type==='error')errors.push(text);},

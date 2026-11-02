@@ -40,10 +40,10 @@ vm.runInContext(receipts+'\n'+polling+'\nglobalThis.api={receiveMessages,markVis
  const homeFunction=homeSource.slice(homeSource.indexOf('async function loadStories(){'),homeSource.indexOf("const account=document.getElementById('accountDialog')"));
  let resolveFirst,homeCalls=0;
  const firstResponse=new Promise(resolve=>{resolveFirst=resolve;});
- const homeContext={list:{replaceChildren(){},children:[]},status:{textContent:''},document:{title:''},
+ const homeContext={AbortSignal,list:{replaceChildren(){},children:[]},status:{textContent:''},document:{title:''},
   fetch:async()=>{homeCalls++;return homeCalls===1?firstResponse:{ok:true,json:async()=>[]};}};
  vm.createContext(homeContext);
- vm.runInContext('const notified=new Map();let initialized=false,loading=false,refreshAgain=false;'+homeFunction+';globalThis.load=loadStories;',homeContext);
+ vm.runInContext('const notified=new Map();let initialized=false,loading=false,refreshAgain=false,storySignature="";'+homeFunction+';globalThis.load=loadStories;',homeContext);
  const pending=homeContext.load();await homeContext.load();
  resolveFirst({ok:true,json:async()=>[]});await pending;
  for(let i=0;i<5;i++)await Promise.resolve();

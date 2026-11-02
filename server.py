@@ -141,15 +141,18 @@ async def bind_conversation(request: Request, call_next):
         if channel != "group" and request.url.path != "/api/conversations":
             import hashlib
             child = hashlib.sha256((conversation + ":private:" + channel).encode()).hexdigest()[:48]
-            await asyncio.to_thread(storage.get_store().ensure, user, child,
-                                    {"world_id": conversation, "channel": channel, "title": PRIVATE_NAMES[channel], "scene_state": {}, "recent_log": []})
+            try:
+                snapshot = await asyncio.to_thread(storage.load_request_data, user, child)
+            except PermissionError:
+                await asyncio.to_thread(storage.get_store().ensure, user, child,
+                                        {"world_id": conversation, "channel": channel, "title": PRIVATE_NAMES[channel], "scene_state": {}, "recent_log": []})
+                snapshot = await asyncio.to_thread(storage.load_request_data, user, child)
             conversation = child
-            snapshot = await asyncio.to_thread(storage.load_request_data, user, child)
     except PermissionError:
         return JSONResponse({"error": "Conversation unavailable"}, 404)
     token = storage.scope.set((user, conversation))
     snapshot_token = storage.request_snapshot.set(snapshot)
-    world_token = chat_world.set({"channel": channel, "id": world["scope"][1], "data": world["data"]})
+    world_token = chat_world.set({"channel": channel, "id": world["scope"][1], "data": world["data"], "read_only": request.method == "GET"})
     try:
         return await call_next(request)
     finally:
@@ -582,6 +585,11 @@ def current_scene_status():
 def shared_world_data():
     world = chat_world.get()
     identity = world['id'] if world else storage.scope.get()[1]
+    snapshot = storage.request_snapshot.get()
+    if world and world.get('read_only') and snapshot is not None and snapshot['scope'] == (storage.scope.get()[0], identity):
+        return snapshot['data']
+    if world and world.get('read_only') and 'data' in world:
+        return world['data']
     return storage.get_store().read(storage.scope.get()[0], identity)
 
 
