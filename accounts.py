@@ -41,22 +41,101 @@ def register(name,password):
         db.add(Account(name=name,user_id=user,password_hash=salt+':'+password_hash(password,salt)))
         db.add(storage.User(id=user))
         db.add(storage.Conversation(id=root_id(user),user_id=user,data={'title':'大家一起','recent_log':[],
-            'story_clock':{'day':1,'minute':480},'scene_state':{'时间':'第一天早晨08:00',
+            'initiative_enabled':False,'story_clock':{'day':1,'minute':480},'scene_state':{'时间':'第一天早晨08:00',
                 **{name:'卧室·刚起床' for name in ('小婉','小研','小柳')}}},version=0))
         try:db.flush();db.commit()
         except IntegrityError:raise ValueError('用户名已被使用')
     return user
 
 
-def root_id(user):return hashlib.sha256(('account-story:'+user).encode()).hexdigest()[:48]
+def root_id(user):return 'default' if user=='owner' else hashlib.sha256(('account-story:'+user).encode()).hexdigest()[:48]
 
 
-def login(name,password):
+def registration_mode():
+    value=os.getenv('REGISTRATION_MODE','invite').lower()
+    return value if value in ('invite','open','closed') else 'closed'
+
+
+def check_invite(code):
+    mode=registration_mode()
+    expected=os.getenv('REGISTRATION_INVITE_CODE','')
+    if mode=='closed':raise ValueError('暂未开放注册')
+    if mode=='invite' and (len(expected)<16 or not hmac.compare_digest(code.encode(),expected.encode())):
+        raise ValueError('邀请码无效，请向网站管理员获取')
+
+
+def account_name(user):
     with Session(storage.get_store().engine) as db:
-        row=db.get(Account,name.strip().lower())
+        return db.scalar(select(Account.name).where(Account.user_id==user))
+
+
+def change_password(user,current,password,endpoint=None):
+    if not 10<=len(password)<=128:raise ValueError('密码需为10至128位')
+    with Session(storage.get_store().engine) as db:
+        row=db.scalar(select(Account).where(Account.user_id==user).with_for_update())
+        if not row:raise ValueError('账号不存在')
+        salt,digest=row.password_hash.split(':')
+        if current is not None and not hmac.compare_digest(password_hash(current,salt),digest):
+            raise ValueError('当前密码不正确')
+        salt=secrets.token_hex(16)
+        row.password_hash=salt+':'+password_hash(password,salt)
+        db.execute(delete(LoginSession).where(LoginSession.user_id==user))
+        from push_notifications import Subscription
+        db.execute(delete(Subscription).where(Subscription.user_id==user))
+        db.commit()
+
+
+def create_owner(name,password):
+    """Explicit operator-only binding; never give the first registrant owner data."""
+    import re
+    name=name.strip().lower()
+    if not re.fullmatch(r'[a-z0-9_\-]{3,40}',name) or not 10<=len(password)<=128:
+        raise ValueError('用户名需为3至40位字母、数字、下划线或短横线，密码需为10至128位')
+    salt=secrets.token_hex(16)
+    from sqlalchemy.exc import IntegrityError
+    with Session(storage.get_store().engine) as db:
+        if db.scalar(select(Account).where(Account.user_id=='owner')):
+            raise ValueError('已有管理员绑定原有数据，请使用 reset-password')
+        db.add(Account(name=name,user_id='owner',password_hash=salt+':'+password_hash(password,salt)))
+        try:db.commit()
+        except IntegrityError:raise ValueError('用户名已被使用')
+
+
+class AuthLimit(storage.Base):
+    __tablename__='chat_auth_limits'
+    identity:Mapped[str]=mapped_column(String(64),primary_key=True)
+    until:Mapped[float]=mapped_column(Float)
+    count:Mapped[int]=mapped_column(default=0)
+
+
+def allow_attempt(identity,limit=12,period=60):
+    """Atomic shared limits, including across server processes; store only a digest."""
+    from sqlalchemy import update
+    from sqlalchemy.exc import IntegrityError
+    key=hashlib.sha256(identity.encode()).hexdigest();now=time.time()
+    with Session(storage.get_store().engine) as db:
+        db.execute(delete(AuthLimit).where(AuthLimit.until<now))
+        result=db.execute(update(AuthLimit).where(AuthLimit.identity==key,AuthLimit.count<limit).values(count=AuthLimit.count+1))
+        if result.rowcount:db.commit();return True
+        if db.get(AuthLimit,key):db.rollback();return False
+        db.add(AuthLimit(identity=key,until=now+period,count=1))
+        try:db.commit();return True
+        except IntegrityError:db.rollback();return allow_attempt(identity,limit,period)
+
+
+def login(name,password,previous_token='',endpoint=''):
+    with Session(storage.get_store().engine) as db:
+        row=db.scalar(select(Account).where(Account.name==name.strip().lower()).with_for_update())
         salt,digest=row.password_hash.split(':') if row else ('0'*32,'0'*64)
         valid=hmac.compare_digest(password_hash(password,salt),digest)
         if not row or not valid:raise ValueError('用户名或密码错误')
+        previous=db.get(LoginSession,hashlib.sha256(previous_token.encode()).hexdigest()) if previous_token else None
+        if previous:
+            if endpoint:
+                from push_notifications import Subscription
+                db.execute(delete(Subscription).where(Subscription.user_id==previous.user_id,
+                    Subscription.id==hashlib.sha256(endpoint.encode()).hexdigest()))
+            db.delete(previous)
         token=secrets.token_urlsafe(32)
         db.add(LoginSession(token_hash=hashlib.sha256(token.encode()).hexdigest(),user_id=row.user_id,expires=time.time()+7*86400))
         db.execute(delete(LoginSession).where(LoginSession.expires<time.time()));db.commit()
@@ -70,6 +149,11 @@ def identify(token):
         return row.user_id if row and row.expires>time.time() else None
 
 
-def logout(token):
+def logout(token,endpoint=None):
     with Session(storage.get_store().engine) as db:
+        row=db.get(LoginSession,hashlib.sha256(token.encode()).hexdigest())
+        if row and endpoint:
+            from push_notifications import Subscription
+            db.execute(delete(Subscription).where(Subscription.user_id==row.user_id,
+                Subscription.id==hashlib.sha256(endpoint.encode()).hexdigest()))
         db.execute(delete(LoginSession).where(LoginSession.token_hash==hashlib.sha256(token.encode()).hexdigest()));db.commit()

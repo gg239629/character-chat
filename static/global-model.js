@@ -19,5 +19,5 @@
  el('globalModelClose').onclick=()=>dialog.close();
  el('globalModelSave').onclick=async()=>{lock(true);status.textContent='正在保存…';try{fill(await call('/api/home/model','PUT',draft()));status.textContent='已保存，继承默认模型的会话下次调用生效。';}catch(e){status.textContent=e.message;}finally{lock(false);}};
  el('globalModelTest').onclick=async()=>{lock(true);status.textContent='正在测试…';try{await call('/api/home/model/test','POST',draft());status.textContent='连接成功';}catch(e){status.textContent=e.message;}finally{lock(false);}};
- if(new URLSearchParams(location.search).get('setup')==='model')window.openModelDefaults();
+ if(new URLSearchParams(location.search).get('setup')==='model')Promise.resolve(window.chatSessionReady).then(ready=>{if(ready!==false)window.openModelDefaults();});
 })();

@@ -2,6 +2,7 @@
  const dayKey=(scope,now=new Date())=>'chat-usage-guide:'+scope+':'+[now.getFullYear(),now.getMonth()+1,now.getDate()].join('-');
  window.chatTutorialDayKey=dayKey;
  async function show(){
+  if(window.chatSessionReady&&!await window.chatSessionReady)return;
   if(document.hidden)return;
   try{
    const r=await fetch('/api/home/model',{cache:'no-store'});if(!r.ok)return;

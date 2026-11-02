@@ -4,7 +4,7 @@
 
 创建时填写 MODEL_API_KEY、MODEL_BASE_URL、MODEL_MODEL。APP_PASSWORD 自动随机生成，可在 Render Environment 中查看，登录用户名默认 owner。
 
-部署完成后访问 Render 分配的 HTTPS 地址。/healthz 为健康检查，其余页面和 API 均需密码。
+部署完成后访问 Render 分配的 HTTPS 地址。/healthz 为健康检查。个人模式使用共享密码；启用账号模式后改为网站登录，不再使用浏览器 Basic Auth。登录注册、邀请和旧数据绑定见 [ACCOUNTS.md](ACCOUNTS.md)。
 
 注意：免费实例闲置可能休眠，恢复访问有冷启动。免费实例本地磁盘非持久，重启或重新部署可能丢失在线保存的聊天和设置。模型 API 调用费用另算。
 
@@ -13,7 +13,7 @@
 
 ## 数据库存储更新
 
-本地 SQLite 与外部 PostgreSQL 配置、旧记忆导入规则、后续登录接口和测试方法见 [DATABASE.md](DATABASE.md)。Render 更新前必须配置 DATABASE_URL；未配置时拒绝使用临时磁盘保存记忆。
+本地 SQLite 与外部 PostgreSQL 配置、旧记忆导入规则、账号隔离和测试方法见 [DATABASE.md](DATABASE.md)。Render 更新前必须配置 DATABASE_URL；未配置时拒绝使用临时磁盘保存记忆。
 
 角色代理、消息自动入库、群聊顺序发言和 API Key 加密说明见 [CHAT_CHANNELS.md](CHAT_CHANNELS.md)。更新需安装 requirements.txt；Render 还需配置稳定的 APP_ENCRYPTION_KEY 用于加密数据库中的模型密钥。
 

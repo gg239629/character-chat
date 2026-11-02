@@ -115,6 +115,11 @@ async def stop_role_scheduler():
 async def bind_conversation(request: Request, call_next):
     # Future authentication must set request.state.user_id after verification.
     # Never trust a user ID supplied by the browser.
+    if request.method not in ('GET','HEAD','OPTIONS') and request.url.path.startswith('/api/') and request.url.path!='/api/jobs/tick':
+        origin=request.headers.get('origin')
+        expected=os.getenv('PUBLIC_ORIGIN','').rstrip('/') or str(request.base_url).rstrip('/')
+        if request.headers.get('sec-fetch-site')=='cross-site' or (origin and origin.rstrip('/')!=expected):
+            return JSONResponse({'error':'请求来源无效，请从网站页面操作'},403)
     if not request.url.path.startswith("/api/"):
         return await call_next(request)
     if request.url.path=='/api/jobs/tick':
@@ -124,6 +129,9 @@ async def bind_conversation(request: Request, call_next):
     if accounts.enabled():
         identity=await asyncio.to_thread(accounts.identify,request.cookies.get('chat_session',''))
         if not identity:return JSONResponse({'error':'请先登录'},401)
+        supplied=request.headers.get('X-Session-Scope')
+        if supplied and supplied!=__import__('hashlib').sha256(identity.encode()).hexdigest()[:24]:
+            return JSONResponse({'error':'账号已切换，请重新打开页面','code':'account_changed'},409)
         request.state.user_id=identity
     user = getattr(request.state, "user_id", "owner")
     conversation = request.headers.get("X-Conversation-ID", "default")
@@ -174,18 +182,26 @@ def list_conversations():
 class AccountIn(BaseModel):
     username: str = Field(min_length=1,max_length=40)
     password: str = Field(min_length=1,max_length=128)
+    invite_code: str = Field(default='',max_length=256)
+    endpoint: str = Field(default='',max_length=3000)
 
 
 @app.get('/api/auth/status')
 def account_status(request: Request):
-    return {'enabled':accounts.enabled(),'logged_in':bool(accounts.identify(request.cookies.get('chat_session',''))) if accounts.enabled() else False}
+    user=accounts.identify(request.cookies.get('chat_session','')) if accounts.enabled() else 'owner'
+    return JSONResponse({'enabled':accounts.enabled(),'logged_in':bool(user),
+        'username':accounts.account_name(user) if user and accounts.enabled() else '',
+        'scope':__import__('hashlib').sha256(user.encode()).hexdigest()[:24] if user else '',
+        'registration_mode':accounts.registration_mode()},headers={'Cache-Control':'no-store'})
 
 
 @app.post('/api/auth/register')
 def register_account(body: AccountIn,request: Request):
     if not accounts.enabled():raise HTTPException(404,'账号功能尚未启用')
     auth_rate_limit(request)
-    try:accounts.register(body.username,body.password)
+    try:
+        accounts.check_invite(body.invite_code)
+        accounts.register(body.username,body.password)
     except ValueError as error:raise HTTPException(422,str(error))
     return {'ok':True}
 
@@ -194,7 +210,8 @@ def register_account(body: AccountIn,request: Request):
 def login_account(body: AccountIn,request: Request):
     if not accounts.enabled():raise HTTPException(404,'账号功能尚未启用')
     auth_rate_limit(request)
-    try:token=accounts.login(body.username,body.password)
+    if not accounts.allow_attempt('name:'+body.username.strip().lower(),10):raise HTTPException(429,'尝试次数过多，请一分钟后重试')
+    try:token=accounts.login(body.username,body.password,request.cookies.get('chat_session',''),body.endpoint)
     except ValueError as error:raise HTTPException(401,str(error))
     response=JSONResponse({'ok':True})
     response.set_cookie('chat_session',token,httponly=True,secure=request.url.scheme=='https',samesite='strict',max_age=7*86400)
@@ -202,15 +219,34 @@ def login_account(body: AccountIn,request: Request):
 
 
 def auth_rate_limit(request):
-    import hashlib
-    identity=hashlib.sha256(('auth:'+str(request.client.host if request.client else 'unknown')).encode()).hexdigest()[:40]
-    if not role_actions.claim_check('auth-'+identity,__import__('time').time(),1):
-        raise HTTPException(429,'操作过于频繁，请稍后再试')
+    if not accounts.allow_attempt('ip:'+str(request.client.host if request.client else 'unknown'),30):
+        raise HTTPException(429,'操作过于频繁，请一分钟后重试')
+
+
+class LogoutIn(BaseModel):
+    endpoint: str = Field(default='',max_length=3000)
+
+
+class PasswordIn(BaseModel):
+    current_password: str = Field(min_length=1,max_length=128)
+    new_password: str = Field(min_length=10,max_length=128)
+    endpoint: str = Field(default='',max_length=3000)
+
+
+@app.post('/api/auth/password')
+def change_account_password(body: PasswordIn,request: Request):
+    if not accounts.enabled():raise HTTPException(404,'账号功能尚未启用')
+    user=accounts.identify(request.cookies.get('chat_session',''))
+    if not user:raise HTTPException(401,'请先登录')
+    auth_rate_limit(request)
+    try:accounts.change_password(user,body.current_password,body.new_password,body.endpoint)
+    except ValueError as error:raise HTTPException(422,str(error))
+    response=JSONResponse({'ok':True});response.delete_cookie('chat_session');return response
 
 
 @app.post('/api/auth/logout')
-def logout_account(request: Request):
-    accounts.logout(request.cookies.get('chat_session',''))
+def logout_account(request: Request,body: LogoutIn | None = None):
+    accounts.logout(request.cookies.get('chat_session',''),body.endpoint if body else None)
     response=JSONResponse({'ok':True});response.delete_cookie('chat_session');return response
 
 
@@ -1541,3 +1577,8 @@ def service_worker():
 @app.get("/chat")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get('/login')
+def login_page():
+    return FileResponse(STATIC/'login.html',headers={'Cache-Control':'no-store'})

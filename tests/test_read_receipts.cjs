@@ -37,7 +37,7 @@ vm.runInContext(receipts+'\n'+polling+'\nglobalThis.api={receiveMessages,markVis
  api.receiveMessages([]);api.receiveMessages([{id:'fresh',role:'user',content:'清除后'}],true);
  assert.equal(context.history.length,1,'reset must discard old delta cache');
  const homeSource=fs.readFileSync('static/home.html','utf8');
- const homeFunction=homeSource.slice(homeSource.indexOf('async function loadStories(){'),homeSource.indexOf("const account=document.getElementById('accountDialog')"));
+ const homeFunction=homeSource.slice(homeSource.indexOf('async function loadStories(){'),homeSource.indexOf('/* Account controls are initialized'));
  let resolveFirst,homeCalls=0;
  const firstResponse=new Promise(resolve=>{resolveFirst=resolve;});
  const homeContext={AbortSignal,list:{replaceChildren(){},children:[]},status:{textContent:''},document:{title:''},

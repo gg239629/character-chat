@@ -36,15 +36,20 @@ main{max-width:920px;margin:0 auto;padding:0;border-left:1px solid #242424;borde
 <div class="heading"><h1>我的会话</h1></div>
 <div id="status" role="status"></div><div id="stories" aria-label="独立故事列表"></div>
 </main>
-<dialog id="accountDialog"><h2>账号</h2><p id="accountHint">正在读取账号状态…</p><form id="accountForm" hidden><label for="accountName">用户名</label><input id="accountName" autocomplete="username" maxlength="40" required><label for="accountPassword" style="margin-top:16px">密码</label><input id="accountPassword" type="password" autocomplete="current-password" maxlength="128" required><div class="actions"><button class="quiet" type="button" id="registerAccount">注册</button><button class="primary" type="submit">登录</button></div></form><button class="quiet" id="logoutAccount" hidden>退出登录</button><div class="actions"><button class="quiet" id="closeAccount">关闭</button></div></dialog>
+<dialog id="accountDialog" aria-labelledby="accountTitle"><h2 id="accountTitle">账号</h2><p id="accountHint" role="status"></p>
+<form id="passwordForm" hidden><label for="currentPassword">当前密码</label><input id="currentPassword" type="password" autocomplete="current-password" maxlength="128" required><label for="newPassword" style="margin-top:12px">新密码（至少10位）</label><input id="newPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required><label for="repeatPassword" style="margin-top:12px">确认新密码</label><input id="repeatPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required><div class="actions"><button class="quiet" id="savePassword" type="submit">修改密码并重新登录</button></div></form>
+<div class="actions"><button class="quiet" id="logoutAccount" hidden>退出登录</button><button class="quiet" id="closeAccount">关闭</button></div></dialog>
 <dialog id="homeSettingsDialog" aria-labelledby="homeSettingsTitle"><h2 id="homeSettingsTitle">设置</h2>
+<button class="quiet" id="accountManage" style="width:100%;margin-bottom:12px">账号</button>
 <button class="quiet" id="homeModelSettings" style="width:100%;margin-bottom:20px">大模型配置</button><div id="storyChoiceField" hidden><label for="settingsStory">故事</label><select id="settingsStory"></select></div>
 <div class="setting-row"><div><label id="initiativeLabel">角色主动消息</label><p>关闭后暂停主动联系和私下交流。<br>你发消息后，她们仍会正常回复。</p></div><button class="toggle" id="initiativeToggle" role="switch" aria-checked="false" aria-labelledby="initiativeLabel" disabled></button></div>
 <div class="danger-zone"><h3>重置聊天</h3></div><p>清除所有聊天和记忆，回到第一天清晨。保留头像与模型设置。</p><div><button class="danger" id="resetStory">重置聊天记录</button></div>
 <p id="homeSettingsStatus" role="status" aria-live="polite"></p><div class="actions"><button class="quiet" id="closeHomeSettings">关闭</button></div></dialog>
 <dialog id="resetConfirm" aria-labelledby="resetTitle"><h2 id="resetTitle">重回第一天清晨？</h2><p>四个会话的聊天和记忆都会删除，包括角色之间的私聊。<strong>不创建备份，无法撤销。</strong></p><p id="resetStatus" role="status"></p><div class="actions"><button class="quiet" id="cancelReset">取消</button><button class="danger" id="confirmReset" style="margin-top:0">删除并重置</button></div></dialog>
+<script src="/static/session.js"></script>
 <script src="/static/notifications.js"></script>
 <script>
+(async()=>{if(!await window.chatSessionReady)return;
 const list=document.getElementById('stories'), status=document.getElementById('status');
 let availableStories=[];
 const notified=new Map();let initialized=false;let loading=false;let refreshAgain=false;let storySignature="";
@@ -91,11 +96,7 @@ async function loadStories(){
     document.title=unread?'('+unread+') 会话':'会话';storySignature=signature;initialized=true;
   }catch(e){status.textContent=e.message;}finally{loading=false;if(refreshAgain){refreshAgain=false;loadStories();}}
 }
-const account=document.getElementById('accountDialog');document.getElementById('account').onclick=async()=>{account.showModal();const r=await fetch('/api/auth/status');const d=await r.json();document.getElementById('accountForm').hidden=!d.enabled||d.logged_in;document.getElementById('logoutAccount').hidden=!d.logged_in;document.getElementById('accountHint').textContent=d.enabled?(d.logged_in?'当前已登录':'登录后进入自己的独立聊天空间。'):'当前为个人空间，账号功能尚未启用。';};document.getElementById('closeAccount').onclick=()=>account.close();
-document.getElementById('accountForm').onsubmit=async event=>{event.preventDefault();await submitAccount('login');};
-document.getElementById('registerAccount').onclick=()=>submitAccount('register');
-async function submitAccount(action){try{const r=await fetch('/api/auth/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('accountName').value,password:document.getElementById('accountPassword').value})});const d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'请检查用户名和密码');if(action==='login')location.reload();else document.getElementById('accountHint').textContent='注册成功，请登录。';}catch(e){document.getElementById('accountHint').textContent=e.message;}}
-document.getElementById('logoutAccount').onclick=async()=>{await fetch('/api/auth/logout',{method:'POST'});location.reload();};
+/* Account controls are initialized after trusted session bootstrap. */
 loadStories();
 setInterval(loadStories,10000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadStories();});
@@ -137,15 +138,17 @@ document.getElementById('confirmReset').onclick=async()=>{
  try{const r=await fetch('/api/home/reset',{method:'POST',headers:settingsHeaders(),body:JSON.stringify({confirm:true})});const d=await r.json();if(!r.ok)throw Error(d.detail||'重置失败，请重试');
   for(const channel of ['group','wan','yan','liu']){
    const suffix=(settingsStory.value==='default'?'':':'+settingsStory.value)+(channel==='group'?'':':private:'+channel);
-   const key='companion-chat-v1'+suffix;
-   localStorage.removeItem(key);localStorage.removeItem('companion-chat-saved'+suffix);
+   const prefix=window.chatCachePrefix||'';const key=prefix+'companion-chat-v1'+suffix;
+   localStorage.removeItem(key);localStorage.removeItem(prefix+'companion-chat-saved'+suffix);
    localStorage.removeItem(key+':hidden-before');localStorage.setItem(key+':db-migrated','true');
   }
   localStorage.setItem('companion-read-changed',String(Date.now()));
   notified.clear();resetDialog.close();homeSettingsStatus.textContent='已重置，回到第一天早晨 08:00';await loadStories();
  }catch(e){resetStatus.textContent=e.message;}finally{button.disabled=false;document.getElementById('cancelReset').disabled=false;}
 };
+})();
 </script>
+<script src="/static/account-settings.js"></script>
 <script src="/static/settings-layout.js"></script>
 <script src="/static/global-model.js"></script>
 <script src="/static/onboarding.js"></script>

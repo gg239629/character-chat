@@ -425,7 +425,9 @@
 </div>
 
 
+<script src="/static/session.js"></script>
 <script>
+(async()=>{if(!await window.chatSessionReady)return;
 const conversationId = new URLSearchParams(location.search).get("conversation") || "default";
 const channel = new URLSearchParams(location.search).get('channel') || 'group';
 let profileAvatar = "";
@@ -488,9 +490,9 @@ const fetch = (url, options = {})=>{
   return nativeFetch(url, {...options, headers});
 };
 const channelSuffix = channel === 'group' ? '' : ':private:'+channel;
-const STORE_KEY = "companion-chat-v1" + (conversationId === "default" ? "" : ":" + conversationId) + channelSuffix;
-const SAVED_KEY = "companion-chat-saved" + (conversationId === "default" ? "" : ":" + conversationId) + channelSuffix;
-const STATUS_VISIBLE_KEY = "companion-character-status-visible:" + conversationId + ':' + channel;
+const STORE_KEY = (window.chatCachePrefix||'') + "companion-chat-v1" + (conversationId === "default" ? "" : ":" + conversationId) + channelSuffix;
+const SAVED_KEY = (window.chatCachePrefix||'') + "companion-chat-saved" + (conversationId === "default" ? "" : ":" + conversationId) + channelSuffix;
+const STATUS_VISIBLE_KEY = (window.chatCachePrefix||'') + "companion-character-status-visible:" + conversationId + ':' + channel;
 const statusToggle = document.getElementById("showCharacterStatus");
 const characterStatus = document.querySelector(".character-status");
 try{statusToggle.checked = localStorage.getItem(STATUS_VISIBLE_KEY) !== "false";}catch{}
@@ -510,6 +512,8 @@ const chatEl = document.getElementById("chat");
 chatEl.style.visibility="hidden";
 chatEl.setAttribute("aria-busy","true");
 const inputEl = document.getElementById("input");
+const draftKey='chat-draft:'+window.chatSession.scope+':'+location.pathname+location.search;
+try{inputEl.value=sessionStorage.getItem(draftKey)||'';sessionStorage.removeItem(draftKey);}catch{}
 const sendEl = document.getElementById("send");
 const statusEl = document.getElementById("status");
 
@@ -1119,6 +1123,7 @@ load().then(async()=>{
     inputEl.focus({preventScroll:true});markVisibleRead();
   });
 }).catch(e=>{chatEl.style.visibility='visible';chatEl.removeAttribute('aria-busy');statusEl.textContent=e.message;});
+})();
 </script>
 <script src="/static/onboarding.js"></script>
 <script src="/static/settings-layout.js"></script>
