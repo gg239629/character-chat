@@ -52,6 +52,8 @@ $env:REGISTRATION_INVITE_CODE = Read-Host "粘贴刚才生成的邀请码"
 
 新增表 `chat_auth_limits` 由 SQLAlchemy 自动建立，原账号表继续使用；无须清库或手工执行 SQL。更新数据库结构不会将本地聊天上传到 Neon。
 
+也可通过管理员操作将邀请登录策略保存到 `chat_account_policy`：须先绑定 owner，才允许启用。邀请码只保存 SHA256 摘要，不保存原文；服务启动时读取策略。显式环境变量优先于数据库策略，因此数据库策略启用时无需另填 Render 环境变量。修改策略后需重新部署或重启生效，不改变聊天数据。
+
 ## 验证
 
 `python -m unittest discover -s tests -p test_account_flows.py`

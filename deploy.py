@@ -5,9 +5,6 @@ import secrets
 from server import app
 import accounts
 
-if not accounts.enabled() and not os.getenv("APP_PASSWORD"):
-    raise RuntimeError("Set APP_PASSWORD in Space Settings > Secrets before starting")
-
 @app.middleware("http")
 async def require_password(request, call_next):
     from fastapi.responses import Response
@@ -17,6 +14,8 @@ async def require_password(request, call_next):
         response=await call_next(request)
         response.headers['Cache-Control']='no-store'
         return response
+    if not os.getenv('APP_PASSWORD'):
+        return Response('Configure account login or APP_PASSWORD before opening the site',status_code=503)
     if request.url.path=='/api/jobs/tick':
         token=os.getenv('ROLE_CRON_TOKEN','')
         if len(token)>=32 and secrets.compare_digest(request.headers.get('authorization',''),'Bearer '+token):

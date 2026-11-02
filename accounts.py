@@ -23,7 +23,39 @@ class LoginSession(storage.Base):
     expires:Mapped[float]=mapped_column(Float)
 
 
-def enabled():return os.getenv('ENABLE_USER_ACCOUNTS','false').lower() in ('1','true','yes')
+_runtime_policy = {}
+
+
+class AccountPolicy(storage.Base):
+    __tablename__='chat_account_policy'
+    id:Mapped[str]=mapped_column(String(32),primary_key=True)
+    enabled:Mapped[bool]=mapped_column(default=False)
+    mode:Mapped[str]=mapped_column(String(16),default='invite')
+    invite_digest:Mapped[str]=mapped_column(String(64),default='')
+
+
+def load_policy():
+    """Load installation policy once at startup; environment settings take precedence."""
+    global _runtime_policy
+    with Session(storage.get_store().engine) as db:
+        row=db.get(AccountPolicy,'default')
+        _runtime_policy={'enabled':row.enabled,'mode':row.mode,'invite_digest':row.invite_digest} if row else {}
+
+
+def configure_policy(invite_code):
+    if len(invite_code)<16:raise ValueError('邀请码至少16字符')
+    with Session(storage.get_store().engine) as db:
+        if not db.scalar(select(Account).where(Account.user_id=='owner')):
+            raise ValueError('请先绑定管理员，再启用登录')
+        row=db.get(AccountPolicy,'default')
+        if not row:row=AccountPolicy(id='default');db.add(row)
+        row.enabled=True;row.mode='invite';row.invite_digest=hashlib.sha256(invite_code.encode()).hexdigest()
+        db.commit()
+
+
+def enabled():
+    value=os.getenv('ENABLE_USER_ACCOUNTS')
+    return value.lower() in ('1','true','yes') if value is not None else bool(_runtime_policy.get('enabled',False))
 
 
 def password_hash(password,salt):
@@ -52,16 +84,18 @@ def root_id(user):return 'default' if user=='owner' else hashlib.sha256(('accoun
 
 
 def registration_mode():
-    value=os.getenv('REGISTRATION_MODE','invite').lower()
+    value=os.getenv('REGISTRATION_MODE',_runtime_policy.get('mode','invite')).lower()
     return value if value in ('invite','open','closed') else 'closed'
 
 
 def check_invite(code):
     mode=registration_mode()
-    expected=os.getenv('REGISTRATION_INVITE_CODE','')
+    expected=os.getenv('REGISTRATION_INVITE_CODE')
     if mode=='closed':raise ValueError('暂未开放注册')
-    if mode=='invite' and (len(expected)<16 or not hmac.compare_digest(code.encode(),expected.encode())):
-        raise ValueError('邀请码无效，请向网站管理员获取')
+    if mode=='invite':
+        valid=(len(expected)>=16 and hmac.compare_digest(code.encode(),expected.encode())) if expected is not None else (
+            bool(_runtime_policy.get('invite_digest')) and hmac.compare_digest(hashlib.sha256(code.encode()).hexdigest(),_runtime_policy['invite_digest']))
+        if not valid:raise ValueError('邀请码无效，请向网站管理员获取')
 
 
 def account_name(user):

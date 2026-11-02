@@ -121,3 +121,18 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code,200)
         self.assertNotEqual(accounts.identify(self.client.cookies.get('chat_session')),user)
         with Session(self.store.engine) as db:self.assertIsNone(db.get(push_notifications.Subscription,key))
+
+    def test_database_policy_requires_owner_and_environment_can_override(self):
+        import copy
+        previous=copy.deepcopy(accounts._runtime_policy)
+        try:
+            with self.assertRaises(ValueError):accounts.configure_policy('policy-invite-code-12345')
+            accounts.create_owner('admin','admin-password-123')
+            accounts.configure_policy('policy-invite-code-12345')
+            accounts.load_policy()
+            with patch.dict(os.environ,{},clear=True):
+                self.assertTrue(accounts.enabled());self.assertEqual(accounts.registration_mode(),'invite')
+                accounts.check_invite('policy-invite-code-12345')
+                with self.assertRaises(ValueError):accounts.check_invite('wrong-code')
+            with patch.dict(os.environ,{'ENABLE_USER_ACCOUNTS':'false'}):self.assertFalse(accounts.enabled())
+        finally:accounts._runtime_policy=previous

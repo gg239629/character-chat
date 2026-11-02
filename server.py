@@ -63,6 +63,7 @@ def initialize_database():
     storage.initialize()
     import schema_migrations
     schema_migrations.upgrade(storage.get_store().engine)
+    accounts.load_policy()
     secrets_store.migrate_credentials()
     peer_chat.migrate_legacy()
 
