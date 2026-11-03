@@ -155,3 +155,24 @@ class ImageTests(unittest.TestCase):
         state=self.store.read('owner','default')
         self.assertNotIn('liu',state.get('role_positions',{}))
         self.assertNotIn('household_meal',state)
+
+    def test_dismiss_failed_job_persists_and_checks_owner_world_channel_and_status(self):
+        self.configure();job=self.enqueue()
+        with self.assertRaises(ValueError):images.dismiss('owner','default','liu',job['id'])
+        with Session(self.store.engine) as db:
+            db.get(images.Job,job['id']).status='failed';db.commit()
+        with self.assertRaises(PermissionError):images.dismiss('owner','default','wan',job['id'])
+        self.store.ensure('other','other',{})
+        with self.assertRaises(PermissionError):images.dismiss('other','other','liu',job['id'])
+        with self.assertRaises(PermissionError):images.dismiss('owner','wrong-world','liu',job['id'])
+        with TestClient(server.app) as client:
+            headers={'X-Chat-Channel':'liu'}
+            self.assertEqual(client.post('/api/images/'+job['id']+'/dismiss',headers={'X-Chat-Channel':'wan'}).status_code,404)
+            self.assertEqual(client.post('/api/images/'+job['id']+'/dismiss',headers=headers).status_code,200)
+            self.assertEqual(client.post('/api/images/'+job['id']+'/dismiss',headers=headers).status_code,200)
+            self.assertEqual(client.get('/api/images',headers=headers).json(),[])
+        reopened=storage.Store(str(self.store.engine.url))
+        try:
+            with Session(reopened.engine) as db:self.assertEqual(db.get(images.Job,job['id']).status,'dismissed')
+        finally:reopened.engine.dispose()
+        with patch('openai.OpenAI') as provider:images.process(job['id']);provider.assert_not_called()

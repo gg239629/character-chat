@@ -45,6 +45,17 @@ def seed_message():
     return {'ok':True}
 
 
+@app.post('/__test__/failed-image')
+def seed_failed_image():
+    from backend.app.characters import image_generation as images
+    from sqlalchemy.orm import Session
+    images.save_settings('owner',dict(enabled=True,inherit_connection=False,model='fixture',base_url='https://fixture.invalid/v1',api_key='fixture'))
+    job=images.enqueue('owner','default','liu','liu','test image','1024x1024',uuid4().hex)
+    with Session(storage.get_store().engine) as db:
+        row=db.get(images.Job,job['id']);row.status='failed';row.error='test failure';db.commit()
+    return {'id':job['id']}
+
+
 if __name__=='__main__':
     import uvicorn
     uvicorn.run(app,host='127.0.0.1',port=8799)

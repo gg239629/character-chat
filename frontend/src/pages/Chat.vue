@@ -36,7 +36,7 @@ async function refreshImages(){if(stopped||document.hidden||imagePending)return;
 async function generateImage(prompt:string,size:string,actor:string){if(imageBusy.value)return;imageBusy.value=true;imageError.value='';const key=JSON.stringify({prompt,size,actor});if(imageRequestKey!==key){imageRequestId='';imageRequestKey=key;}imageRequestId ||= crypto.randomUUID();try{const job=await api<ImageJob>('/api/images',{method:'POST',body:json({prompt,size,actor,request_id:imageRequestId})},scope);imageRequestId='';input.value='';imageDialog.value=false;imageJobs.value=[job,...imageJobs.value.filter(j=>j.id!==job.id)];await poll();refreshImages();}catch(e){imageError.value=(e as Error).message;status.value=imageError.value;}finally{imageBusy.value=false;}}
 function openImage(){imageError.value='';imageDialog.value=true;}
 function retryImage(job:ImageJob){imageRequestId='';generateImage(job.prompt,job.size,job.actor);}
-function dismissImage(id:string){dismissedImages.add(id);imageJobs.value=imageJobs.value.filter(j=>j.id!==id);}
+async function dismissImage(id:string){try{await api('/api/images/'+encodeURIComponent(id)+'/dismiss',{method:'POST'},scope);dismissedImages.add(id);imageJobs.value=imageJobs.value.filter(j=>j.id!==id);}catch(e){status.value=(e as Error).message;}}
 const watchedRuns=new Set<string>();
 useEvents(()=>{poll();refreshScene();refreshImages();for(const id of watchedRuns)watchRun(id);});
 let pollTimer:ReturnType<typeof setInterval>,sceneTimer:ReturnType<typeof setInterval>;

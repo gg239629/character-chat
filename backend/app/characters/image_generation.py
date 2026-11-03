@@ -139,7 +139,21 @@ def recent(user,world,channel):
     storage.get_store().read(user,world)
     with Session(storage.get_store().engine) as db:
         return [info(row) for row in db.scalars(select(Job).where(Job.user_id==user,Job.world_id==world,Job.channel==channel,
-            Job.status!='done').order_by(Job.created_at.desc()).limit(6))]
+            Job.status.in_(['pending','running','failed'])).order_by(Job.created_at.desc()).limit(6))]
+
+
+def dismiss(user,world,channel,identity):
+    storage.get_store().read(user,world)
+    with Session(storage.get_store().engine) as db:
+        row=db.get(Job,identity)
+        if not row or (row.user_id,row.world_id,row.channel)!=(user,world,channel):raise PermissionError('图片任务不存在')
+        if row.status=='dismissed':return
+        if row.status!='failed':raise ValueError('只能关闭失败的图片任务')
+        result=db.execute(update(Job).where(Job.id==identity,Job.user_id==user,Job.world_id==world,
+            Job.channel==channel,Job.status=='failed').values(status='dismissed'))
+        if not result.rowcount:raise ValueError('任务状态已变化，请刷新后重试')
+        db.commit()
+    events.publish(user)
 
 
 def content(user,identity):

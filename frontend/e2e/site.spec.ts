@@ -48,3 +48,12 @@ test('SSE delivers a background message without waiting for fallback polling',as
  const result=await page.request.post('/__test__/message');expect(result.ok()).toBe(true);
  await expect(page.locator('.story').filter({hasText:'今天一起去植物园吧。'})).toHaveCount(1,{timeout:5000});
 });
+
+test('dismissed failed images stay closed after refresh and reentry',async({page})=>{
+ const seed=await page.request.post('/__test__/failed-image');expect(seed.ok()).toBe(true);
+ await page.goto('/chat?conversation=default&channel=liu');
+ const card=page.locator('.image-task').filter({hasText:'test failure'});await expect(card).toBeVisible();
+ await card.getByRole('button',{name:'关闭',exact:true}).click();await expect(card).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('button',{name:'图片',exact:true})).toBeVisible();await expect(card).toHaveCount(0);
+ await page.goto('/');await page.goto('/chat?conversation=default&channel=liu');await expect(page.getByRole('button',{name:'图片',exact:true})).toBeVisible();await expect(card).toHaveCount(0);
+});

@@ -63,3 +63,13 @@ def image_status(identity:str):
     world=chat_world.get()
     try:return images.get(storage.scope.get()[0],world['id'],world['channel'],identity)
     except PermissionError:raise HTTPException(404,'图片任务不存在')
+
+
+@router.post('/api/images/{identity}/dismiss')
+def dismiss_image(identity:str):
+    world=chat_world.get()
+    try:
+        images.dismiss(storage.scope.get()[0],world['id'],world['channel'],identity)
+        return {'ok':True}
+    except PermissionError:raise HTTPException(404,'图片任务不存在')
+    except ValueError as error:raise HTTPException(409,str(error))
