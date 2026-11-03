@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import Mock, patch
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class RequestSnapshotTests(unittest.TestCase):

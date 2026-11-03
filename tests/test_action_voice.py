@@ -4,9 +4,9 @@ from unittest.mock import patch,AsyncMock
 from fastapi.testclient import TestClient
 import test_home_settings as fixtures
 import server
-import role_actions
-import action_voice
-import actors
+from backend.app.runtime import role_actions
+from backend.app.characters import action_voice
+from backend.app.characters import actors
 
 
 class ActionVoiceTests(unittest.TestCase):

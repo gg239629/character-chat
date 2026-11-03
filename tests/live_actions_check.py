@@ -11,11 +11,11 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 def events(response):

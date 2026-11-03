@@ -10,3 +10,8 @@ memory/long_term/
 
 .test-tmp/
 .idea/
+node_modules/
+frontend/node_modules/
+static/web/
+
+.venv/

@@ -10,12 +10,12 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import chat_history
-import maintenance
-import memory_autosave
+from backend.app.conversations import chat_history
+from backend.app.infrastructure import maintenance
+from backend.app.memory import memory_autosave
 import server
-import storage
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world.story_reset import reset_story
 
 
 async def checkpoint():

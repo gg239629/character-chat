@@ -6,10 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 import test_home_settings as fixtures
-import actors
-import chat_history
-import role_actions as actions
-import peer_chat
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions as actions
+from backend.app.conversations import peer_chat
 import server
 
 

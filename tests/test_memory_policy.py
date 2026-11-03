@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace as S
 from unittest.mock import patch
-import storage
-import long_memory
+from backend.app.infrastructure import storage
+from backend.app.memory import long_memory
 
 
 def conversation(count):

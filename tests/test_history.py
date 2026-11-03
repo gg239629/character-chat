@@ -1,5 +1,5 @@
 import unittest
-from role_routing import merge_recent_history
+from backend.app.characters.role_routing import merge_recent_history
 
 def rounds(start, end):
     return [m for i in range(start,end) for m in [{"role":"user","content":str(i)}, {"role":"assistant","content":"小研：答"+str(i)}]]

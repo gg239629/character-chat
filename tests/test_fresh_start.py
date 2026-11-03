@@ -9,14 +9,14 @@ from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import maintenance
-import role_actions
-import scene_labels
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.infrastructure import maintenance
+from backend.app.runtime import role_actions
+from backend.app.world import scene_labels
 import server
-import storage
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world.story_reset import reset_story
 
 
 class FreshStartTests(unittest.TestCase):
@@ -57,17 +57,27 @@ class FreshStartTests(unittest.TestCase):
 
     def test_private_status_changes_only_owner_and_group_can_change_multiple(self):
         reset_story('owner','default',self.root/'backups')
+        seed=self.store.read('owner','default')['role_states']['wan']['status']
         response={'地点':'厨房','小研':{'地点':'厨房','动作':'煮粥'},'小婉':{'地点':'院子','动作':'跑步'},'小柳':{'地点':'书房','动作':'看书'}}
         fake=MagicMock();fake.__enter__.return_value=fake
-        fake.chat.completions.create.side_effect=lambda **kwargs:SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(response,ensure_ascii=False)))])
+        def extract(**kwargs):
+            messages=json.loads(kwargs['messages'][1]['content'])['messages']
+            events=[]
+            for m in messages:
+                for role,name,evidence,status in [('yan','小研','走进厨房煮粥','厨房·煮粥'),
+                    ('wan','小婉','小婉在院子跑步','院子·跑步'),('liu','小柳','小柳在书房看书','书房·看书')]:
+                    if evidence in m['content']:
+                        events.append({'source_id':m['source_id'],'actor':role,'evidence':evidence,'status':status})
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({'events':events},ensure_ascii=False)))])
+        fake.chat.completions.create.side_effect=extract
         cfg={'api_key':'fake','model':'test','base_url':''}
         with patch('openai.OpenAI',return_value=fake):
             with role_actions.window('owner','default','yan'):
                 server.update_scene_state([{'role':'assistant','content':'小研：（走进厨房煮粥）早饭喝粥'}],cfg_override=cfg)
                 scene=server.displayed_scene()
                 self.assertEqual(scene['小研'],'厨房·煮粥')
-                self.assertEqual(scene['小婉'],'卧室·刚起床');self.assertEqual(scene['小柳'],'卧室·刚起床')
-                self.assertEqual(scene['地点'],'各自住处')
+                self.assertEqual(scene['小婉'],seed);self.assertEqual(scene['小柳'],seed)
+                self.assertEqual(scene['地点'],'合租屋')
             with role_actions.window('owner','default','group'):
                 server.update_scene_state([{'role':'user','content':'小婉在院子跑步，小柳在书房看书'}],cfg_override=cfg)
                 scene=server.displayed_scene()

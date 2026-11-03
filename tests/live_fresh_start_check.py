@@ -5,11 +5,11 @@ import sys
 import tempfile
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import actors
-import role_actions
+from backend.app.characters import actors
+from backend.app.runtime import role_actions
 import server
-import storage
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world.story_reset import reset_story
 
 
 def main():

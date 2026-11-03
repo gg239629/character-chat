@@ -10,15 +10,15 @@ from fastapi.testclient import TestClient
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import group_coordinator
-import long_memory
-import model_usage
-import role_actions
-import role_memory
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import group_coordinator
+from backend.app.memory import long_memory
+from backend.app.infrastructure import model_usage
+from backend.app.runtime import role_actions
+from backend.app.memory import role_memory
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class EfficiencyTests(unittest.TestCase):
@@ -81,7 +81,12 @@ class EfficiencyTests(unittest.TestCase):
             state=server.update_scene_state([{'role':'user','content':'早上好'},{'role':'assistant','content':'小婉：我在外面跑步。'}])
             self.assertEqual(state['小婉'],'卧室·看书');provider.assert_not_called()
         fake=MagicMock();fake.__enter__.return_value=fake
-        fake.chat.completions.create.return_value=S(choices=[S(message=S(content='{"小婉":{"地点":"厨房","动作":"煮粥"}}'))])
+        def extract(**kwargs):
+            source=json.loads(kwargs['messages'][1]['content'])['messages'][0]['source_id']
+            return S(choices=[S(message=S(content=json.dumps({'events':[{
+                'source_id':source,'actor':'wan','evidence':'走进厨房煮粥',
+                'status':'厨房·煮粥','position':{'place':'厨房'}}]})))])
+        fake.chat.completions.create.side_effect=extract
         with role_actions.window('owner','default','group'),patch('openai.OpenAI',return_value=fake):
             scene=server.update_scene_state([{'role':'assistant','content':'小婉：（走进厨房煮粥）'}],cfg_override={'api_key':'fake','model':'test','base_url':''})
             self.assertEqual(scene['小婉'],'厨房·煮粥');fake.chat.completions.create.assert_called_once()

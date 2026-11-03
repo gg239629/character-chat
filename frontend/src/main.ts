@@ -1,0 +1,12 @@
+import { createApp } from 'vue';
+import { createRouter,createWebHistory } from 'vue-router';
+import App from './App.vue';
+import Home from './pages/Home.vue';
+import Chat from './pages/Chat.vue';
+import Login from './pages/Login.vue';
+import { auth,bootstrap } from './api';
+import './style.css';
+const router=createRouter({history:createWebHistory(),routes:[{path:'/',component:Home},{path:'/chat',component:Chat},{path:'/login',component:Login}]});
+router.beforeEach(async to=>{await bootstrap();if(auth.enabled&&!auth.logged_in&&to.path!='/login')return {path:'/login',query:{next:to.fullPath}};if((!auth.enabled||auth.logged_in)&&to.path==='/login')return '/';});
+const app=createApp(App);app.config.errorHandler=()=>{document.getElementById('app')!.textContent='暂时无法加载页面，请刷新重试。';};
+router.onError(()=>{document.getElementById('app')!.textContent='暂时无法连接服务器，请刷新重试。';});app.use(router);app.mount('#app');

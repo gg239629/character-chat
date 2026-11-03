@@ -5,7 +5,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 from cryptography.fernet import Fernet
-import storage,server,role_actions,chat_history
+from backend.app.infrastructure import storage; import server; from backend.app.runtime import role_actions; from backend.app.conversations import chat_history
 
 
 def main():

@@ -1,3 +1,4 @@
+import importlib
 import unittest
 import json
 from unittest.mock import patch
@@ -5,13 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 import test_home_settings as fixtures
-import storage
-import chat_history
-import memory_autosave
-import message_service
-import event_memory
-import peer_chat
-import task_health
+from backend.app.infrastructure import storage
+from backend.app.conversations import chat_history
+from backend.app.memory import memory_autosave
+from backend.app.conversations import message_service
+from backend.app.memory import event_memory
+from backend.app.conversations import peer_chat
+from backend.app.infrastructure import task_health
 
 
 class RemainingTests(unittest.TestCase):
@@ -20,7 +21,7 @@ class RemainingTests(unittest.TestCase):
 
     def test_buffered_and_durable_messages_have_same_provenance(self):
         with TestClient(__import__('server').app):
-            with __import__('role_actions').window('owner','default','yan'):
+            with importlib.import_module('backend.app.runtime.role_actions').window('owner','default','yan'):
                 chat_history.bootstrap();chat_history.append('buffered',0,'assistant','小研：你好','小研')
                 memory_autosave.flush(*storage.scope.get(),force=True)
                 message_service.durable_append('durable',0,'assistant','小研：你好','小研')
@@ -45,7 +46,7 @@ class RemainingTests(unittest.TestCase):
             self.assertFalse(cleared['delta']);self.assertEqual(cleared['messages'],[])
 
     def test_foreign_cursor_cannot_retrieve_other_private_messages(self):
-        import role_actions
+        from backend.app.runtime import role_actions
         with TestClient(__import__('server').app) as client:
             with role_actions.window('owner','default','yan'):
                 chat_history.append('secret',0,'user','yan-only')
@@ -99,7 +100,7 @@ class RemainingTests(unittest.TestCase):
             self.assertEqual(client.get('/api/info',params={'details':False}).status_code,200)
 
     def test_shared_policy_rejects_nonparticipants_and_hidden_user_window(self):
-        import channel_policy
+        from backend.app.conversations import channel_policy
         policy=channel_policy.resolve('owner','default','peer:yan-liu','yan')
         self.assertFalse(policy.user_visible);self.assertEqual(set(policy.participants),{'yan','liu'})
         with self.assertRaises(PermissionError):channel_policy.resolve('owner','default','peer:yan-liu','wan')
@@ -108,7 +109,7 @@ class RemainingTests(unittest.TestCase):
 
     def test_diagnostics_migration_preserves_old_errors(self):
         from sqlalchemy import create_engine,text
-        import schema_migrations
+        from backend.app.infrastructure import schema_migrations
         engine=create_engine('sqlite:///'+(self.root/'old-health.db').as_posix())
         try:
             with engine.begin() as db:
@@ -120,7 +121,7 @@ class RemainingTests(unittest.TestCase):
         finally:engine.dispose()
 
     def test_background_retry_requires_failed_task_and_same_story_owner(self):
-        import maintenance
+        from backend.app.infrastructure import maintenance
         import time
         from sqlalchemy import update
         maintenance.enqueue('owner','default','group','retry-scene',time.time())

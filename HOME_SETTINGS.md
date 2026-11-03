@@ -1,6 +1,6 @@
 # 主页设置
 
-主页左下角设置按钮包含两个功能，手机端也保留底部入口。存在多个故事时先选择故事；开关和重置均按当前用户、所选故事生效。
+主页左下角设置按模型、消息、账号、MCP 和数据分页，手机端也保留入口。主动消息开关和重置均按当前用户、所选故事生效。
 
 ## 角色主动消息
 
@@ -10,13 +10,13 @@
 
 ## 重置聊天记录
 
-点击按钮后在确认框选择“删除并重置”，删除当前故事四个会话原文、近期记忆、历史摘要、重要事实、关系进展、角色间隐藏私聊和待办，回到第一天早晨08:00、三人各自卧室刚起床。保留头像、名称、模型配置、性格设置以及主动消息开关。
+点击按钮并确认后，删除当前故事四个会话原文、近期记忆、历史摘要、重要事实、关系进展、角色间隐藏私聊和待办，从当前现实时间重新开始。保留头像、名称、模型配置、性格设置以及主动消息开关。现实时间行为见 [REALTIME.md](REALTIME.md)。
 
 网页调用无备份重置模式，不创建文件或数据库内的聊天备份。已有的手工旧备份及数据库服务商自身备份不在此操作范围。执行时若还有发送或维护任务，会提示稍等再试，避免旧任务把已删记录写回来。仅测试临时数据库，不会在开发阶段清除真实聊天。
 
 后端接口：`GET/PUT /api/home/settings`、`POST /api/home/reset`。旧脚本调用 `story_reset.reset_story(..., backup_dir)` 仍默认备份，网页明确使用 `backup=False`。
 
-验证：`tests/test_home_settings.py`、`node tests/test_home_settings.cjs`；真实模型验证 `python tests/live_home_settings_check.py`。
+验证：`tests/test_home_settings.py`、`tests/test_realtime_world.py`；新版网页使用 frontend 目录的 `npm test` 和 `npm run test:e2e`。真实模型服务验证：`python tests/live_platform_check.py`（临时数据库）。
 
 
 ## 大模型配置与每日教程
@@ -29,4 +29,4 @@
 
 主页和聊天页共用使用教程。按浏览器本地日期与账号标识记录当天是否已经展示，展示后当天刷新/重入不再弹，第二天首次打开再显示；不同浏览器独立记录。教程引导主页左下角配置与测试模型，并说明独立覆盖、主动消息开关和重置行为。
 
-验证：tests/test_model_defaults.py、node tests/test_onboarding.cjs；真实测试使用临时数据库验证四会话继承和中性单字连接，不写入真实聊天。
+验证：`tests/test_model_defaults.py` 及 frontend 目录的 `npm run test:e2e`；真实测试使用临时数据库，不写入真实聊天。

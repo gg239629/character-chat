@@ -4,14 +4,14 @@ from unittest.mock import patch,AsyncMock
 from sqlalchemy import select,event,text,inspect,create_engine
 from sqlalchemy.orm import Session
 import test_home_settings as fixtures
-import storage
-import chat_history
-import chat_inbox
-import peer_chat
-import role_actions
-import message_service
+from backend.app.infrastructure import storage
+from backend.app.conversations import chat_history
+from backend.app.conversations import chat_inbox
+from backend.app.conversations import peer_chat
+from backend.app.runtime import role_actions
+from backend.app.conversations import message_service
 import server
-import schema_migrations
+from backend.app.infrastructure import schema_migrations
 from fastapi.testclient import TestClient
 
 
@@ -38,7 +38,7 @@ class ReliabilityTests(unittest.TestCase):
                 self.assertNotEqual(db.get(role_actions.Action,action['id']).status,'sent')
 
     def test_unchanged_poll_queries_only_indexed_head_and_handles_buffer_and_clear(self):
-        import memory_autosave
+        from backend.app.memory import memory_autosave
         with TestClient(server.app):
             chat_history.bootstrap();chat_history.append('first',0,'user','original body')
             memory_autosave.flush(*storage.scope.get(),force=True)

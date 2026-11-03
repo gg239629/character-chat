@@ -2,8 +2,8 @@
 import argparse
 import getpass
 import secrets
-import accounts
-import storage
+from backend.app.accounts import accounts
+from backend.app.infrastructure import storage
 
 
 def main():

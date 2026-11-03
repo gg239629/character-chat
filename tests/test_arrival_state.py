@@ -4,11 +4,11 @@ from types import SimpleNamespace as S
 import json
 from fastapi.testclient import TestClient
 import test_home_settings as fixtures
-import role_actions
-import scene_labels
+from backend.app.runtime import role_actions
+from backend.app.world import scene_labels
 import server
-import storage
-import world_events
+from backend.app.infrastructure import storage
+from backend.app.world import world_events
 
 
 class ArrivalTests(unittest.TestCase):

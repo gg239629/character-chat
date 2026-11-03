@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 from sqlalchemy.orm import Session
 import test_home_settings as fixtures
-import server,storage,model_defaults,role_actions
+import server; from backend.app.infrastructure import storage; from backend.app.characters import model_defaults; from backend.app.runtime import role_actions
 from fastapi.testclient import TestClient
 REAL_LOAD=server.load_config
 

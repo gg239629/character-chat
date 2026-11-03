@@ -10,12 +10,12 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import storage
+from backend.app.infrastructure import storage
 import server
-import actors
-import role_actions
-import peer_chat
-import chat_history
+from backend.app.characters import actors
+from backend.app.runtime import role_actions
+from backend.app.conversations import peer_chat
+from backend.app.conversations import chat_history
 
 
 def main():

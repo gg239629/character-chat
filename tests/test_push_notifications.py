@@ -10,16 +10,16 @@ from cryptography.hazmat.primitives import serialization
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-import chat_history
-import push_notifications as push
+from backend.app.conversations import chat_history
+from backend.app.conversations import push_notifications as push
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class PushTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import AsyncMock
-        import actors
+        from backend.app.characters import actors
         self.coordinator_patch=patch.object(server.group_coordinator,'plan',new=AsyncMock(side_effect=lambda messages,configs:[role for role in actors.candidates(messages) if not any(m.get('role')=='assistant' and m.get('content','').startswith(actors.ROLES[role]+'：') for m in server.recent_rounds(messages,1))]))
         self.coordinator_patch.start()
         self.addCleanup(self.coordinator_patch.stop)

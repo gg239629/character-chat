@@ -1,4 +1,26 @@
-# Render 免费部署
+# Character Chat
+
+网页与外部 MCP 客户端共用人物服务，消息接收与回复任务分离。后端按账号、人物、聊天、世界状态、记忆和运行时分层；前端使用 Vue 3、TypeScript 和 Vite。
+
+结构、LangGraph 调度、可选 LlamaIndex 检索及数据库迁移见 [ARCHITECTURE.md](ARCHITECTURE.md)；外部人物调用见 [MCP.md](MCP.md)。
+
+人物状态、空间关系、持久事件历史和发言上下文的更新规则见 [WORLD_STATE.md](WORLD_STATE.md)。
+
+聊天图片生成、独立图片模型配置和持久保存见 [IMAGES.md](IMAGES.md)。
+
+## 本地启动
+
+现有本地账号配置仍有效。在项目目录执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start_local.ps1
+```
+
+启动脚本使用本地 SQLite，首次或前端源代码变化后自动构建网页，然后启动 http://127.0.0.1:8788 。前端构建需要 Node.js 22 和 npm。自定义环境可单独执行 `npm ci`、`npm run build`（在 frontend 目录），再用 `python -m uvicorn backend.app.main:app` 启动。旧的 `server:app` 入口保留兼容。
+
+本地或局域网 IP（如 `http://192.168.95.1:56828/v1`）及 localhost 模型接口自动直连，避免 `HTTP_PROXY`、`HTTPS_PROXY` 等环境代理拦截请求而返回 502。公网模型接口继续沿用环境代理设置；该规则同时用于连接测试、角色聊天、场景维护、历史摘要和向量检索，不需要关闭系统代理。
+
+## Render 免费部署
 
 将本目录上传到 GitHub 私有仓库，然后在 Render 使用 New → Blueprint 连接此仓库。render.yaml 已固定 plan: free。
 
@@ -22,4 +44,6 @@
 模型用量统计、上下文去重、按需检索和群聊统一辅助模型路由见 [EFFICIENCY.md](EFFICIENCY.md)。
 
 
-当前提示词仅由 prompt/system.md、角色档案、actor_instructions.py 和受权限过滤的动态上下文组成。旧注入词与单模型多人续写分支已移除。
+当前提示词由 prompt/system.md、角色档案、backend/app/characters/actor_instructions.py 和受权限过滤的动态上下文组成。本次结构迁移保留已有角色资料。
+
+本地启动脚本使用项目内 `.venv`，首次启动或锁文件变化时通过 uv 安装锁定依赖，避免共享环境升级 MCP 等包影响本项目。无需手动激活环境。

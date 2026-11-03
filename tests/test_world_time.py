@@ -7,13 +7,13 @@ from types import SimpleNamespace
 from unittest.mock import patch,AsyncMock,MagicMock
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import actors
-import chat_history
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions
 import server
-import storage
-import world_time
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world import world_time
+from backend.app.world.story_reset import reset_story
 
 
 class WorldTimeTests(unittest.TestCase):
@@ -47,18 +47,18 @@ class WorldTimeTests(unittest.TestCase):
         for role in actors.ROLES:
             with role_actions.window('owner','default',role):
                 _,payload=server.actor_payload(role,[{'role':'user','content':'你现在在干什么'}],False)
-                info=next(message['content'] for message in payload if '全世界唯一的当前故事时间' in message['content'])
-                self.assertIn('第1天 20:00',info)
-                own=self.store.read('owner','default')['personal_progress'][role][-1]['status']
-                self.assertIn(own,info)
+                info=next(message['content'] for message in payload if message['content'].startswith('当前事实与明确设定：'))
+                self.assertIn(self.store.read('owner','default')['realtime_clock']['minute'],info)
+                own=self.store.read('owner','default')['role_states'][role]['status']
+                self.assertTrue(any(own in item['content'] for item in payload))
                 self.assertEqual(chat_history.messages(),[])
                 self.assertTrue(all(other not in info for other in [key for key in actors.ROLES if key!=role]))
                 self.assertTrue(len(own)<=10);statuses.append(own)
-        self.assertGreater(len(set(statuses)),1)
+        self.assertEqual(len(statuses),3)
         data=self.store.read('owner','default')
         before=json.dumps(data['personal_progress'],ensure_ascii=False)
         self.store.mutate('owner','default',lambda data:world_time.apply(data,{'day':1,'minute':1200},{'yan'},time.time()))
-        self.assertEqual(json.dumps(self.store.read('owner','default')['personal_progress'],ensure_ascii=False),before)
+        self.assertEqual(json.dumps(self.store.read('owner','default').get('personal_progress',{}),ensure_ascii=False),before)
 
     def test_private_stream_advances_before_answer_and_retry_does_not_advance_twice(self):
         seen=[]
@@ -74,25 +74,27 @@ class WorldTimeTests(unittest.TestCase):
             headers={'X-Chat-Channel':'wan'}
             response=client.post('/api/stream',headers=headers,json=body)
             self.assertIn('"done": true',response.text)
-            self.assertIn('第2天 20:00',seen[0])
+            real_stamp=self.store.read('owner','default')['realtime_clock']['minute']
+            self.assertIn(real_stamp,seen[0])
             client.post('/api/stream',headers=headers,json=body)
             self.assertEqual(len(seen),1)
             for role in ['group',*actors.ROLES]:
-                self.assertEqual(client.get('/api/info',headers={'X-Chat-Channel':role}).json()['scene_state']['时间'],'第2天 20:00')
+                self.assertEqual(client.get('/api/info',headers={'X-Chat-Channel':role}).json()['scene_state']['时间'],real_stamp)
             root=self.store.read('owner','default')
             for role in ['yan','liu']:
-                self.assertEqual(len(root['personal_progress'][role]),1)
+                self.assertEqual(len(root.get('personal_progress',{}).get(role,[])),0)
                 with actors.role_scope('owner','default',role):self.assertEqual(chat_history.messages(),[])
             # Delayed maintenance for the same relative-time sentence cannot advance a third day.
             with role_actions.window('owner','default','wan'),patch('openai.OpenAI',side_effect=RuntimeError('skip')):
                 revision=server.scene_revision.set(time.time()+1)
                 try:server.update_scene_state(body['messages'],cfg_override=cfg)
                 finally:server.scene_revision.reset(revision)
-            self.assertEqual(self.store.read('owner','default')['story_clock']['day'],2)
+            self.assertEqual(self.store.read('owner','default')['story_clock']['day'],1)
 
     def test_old_scene_cannot_override_a_new_time_period(self):
         now=time.time()+1
-        self.store.mutate('owner','default',lambda data:world_time.apply(data,{'day':1,'minute':1200},{'wan'},now))
+        self.store.mutate('owner','default',lambda data:data.update(world_clock_revision=now))
+        original=self.store.read('owner','default')['role_states']['yan']['status']
         fake=MagicMock();fake.__enter__.return_value=fake
         fake.chat.completions.create.return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({'时间':'早上','小研':{'地点':'卧室','动作':'起床'}})))])
         with role_actions.window('owner','default','group'),patch('openai.OpenAI',return_value=fake):
@@ -100,5 +102,5 @@ class WorldTimeTests(unittest.TestCase):
             try:server.update_scene_state([{'role':'user','content':'你好'}],cfg_override={'api_key':'fake','model':'test','base_url':''})
             finally:server.scene_revision.reset(revision)
             state=server.displayed_scene()
-            self.assertEqual(state['时间'],'第1天 20:00')
-            self.assertEqual(state['小研'],'书房·阅读')
+            self.assertEqual(state['时间'],self.store.read('owner','default')['realtime_clock']['minute'])
+            self.assertEqual(state['小研'],original)

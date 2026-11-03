@@ -12,10 +12,10 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select,update
 from sqlalchemy.orm import Session
 import server
-import storage
-import actors
-import peer_chat
-import role_actions
+from backend.app.infrastructure import storage
+from backend.app.characters import actors
+from backend.app.conversations import peer_chat
+from backend.app.runtime import role_actions
 
 
 def main():

@@ -9,3 +9,10 @@ rank-bm25>=0.2.2,<0.3
 cryptography>=44,<48
 apscheduler>=3.11,<4
 pywebpush>=2.0,<3
+
+langgraph>=1.2,<2
+langgraph-checkpoint-sqlite>=3,<4
+langgraph-checkpoint-postgres>=3,<4
+llama-index-core>=0.14,<0.15
+mcp>=1.30,<2
+alembic>=1.16,<2

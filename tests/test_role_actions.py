@@ -11,17 +11,17 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-import actors
-import chat_history
-import role_actions as actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions as actions
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class RoleActionTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import AsyncMock
-        import actors
+        from backend.app.characters import actors
         self.coordinator_patch=patch.object(server.group_coordinator,'plan',new=AsyncMock(side_effect=lambda messages,configs:[role for role in actors.candidates(messages) if not any(m.get('role')=='assistant' and m.get('content','').startswith(actors.ROLES[role]+'：') for m in server.recent_rounds(messages,1))]))
         self.coordinator_patch.start()
         self.addCleanup(self.coordinator_patch.stop)
@@ -58,7 +58,7 @@ class RoleActionTests(unittest.TestCase):
     def test_delivered_message_survives_physical_metadata_failure(self):
         action=actions.insert_action('owner','default','yan','group','requested','metadata-failure',{
             'decision':'send','message':'小研：大家来吃饭。'})
-        with patch('world_events.capture',side_effect=RuntimeError('metadata unavailable')):
+        with patch('backend.app.world.world_events.capture',side_effect=RuntimeError('metadata unavailable')):
             result=asyncio.run(actions.deliver(action['id']))
         self.assertEqual(result['status'],'sent')
         with actions.window('owner','default','group'):
@@ -108,7 +108,7 @@ class RoleActionTests(unittest.TestCase):
             storage.write_document('behavior',{'enabled':True,'quiet_start':0,'quiet_end':0})
             chat_history.bootstrap()
             chat_history.append('old',0,'user','昨天约好周末去植物园。')
-            import memory_autosave
+            from backend.app.memory import memory_autosave
             memory_autosave.flush('owner',actors.role_id('default','yan'),force=True)
             with Session(self.store.engine) as db:
                 db.execute(update(chat_history.Message).values(created_at=time.time()-7200));db.commit()
@@ -162,7 +162,7 @@ class RoleActionTests(unittest.TestCase):
             self.assertEqual(messages,[])
             self.assertEqual(client.get('/api/actions').json()['actions'],[])
             self.assertNotIn('周末有空吗',client.get('/api/memory/export',headers={'X-Chat-Channel':'liu'}).text)
-        import peer_chat
+        from backend.app.conversations import peer_chat
         self.assertEqual(peer_chat.history('owner','default','liu','yan')[-1]['sender'],'yan')
 
     def test_cron_requires_token_and_behavior_timezone_validation(self):
@@ -183,7 +183,7 @@ class RoleActionTests(unittest.TestCase):
             captured.append(context)
             return {'decision':'send','message':'小柳：好，什么时候？','reason':'愿意交流'}
         with patch.object(actions,'ask_json',new=decide):
-            import peer_chat
+            from backend.app.conversations import peer_chat
             with Session(self.store.engine) as db:
                 job=db.scalar(select(peer_chat.Job.id).where(peer_chat.Job.kind=='reply'))
             asyncio.run(peer_chat.process(job))

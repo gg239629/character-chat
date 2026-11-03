@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 import test_home_settings as fixtures
-import server,storage,actors,role_actions,model_usage
+import server; from backend.app.infrastructure import storage; from backend.app.characters import actors; from backend.app.runtime import role_actions; from backend.app.infrastructure import model_usage
 
 
 class ModelRoutingTests(unittest.TestCase):

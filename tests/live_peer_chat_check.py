@@ -11,12 +11,12 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-import actors
-import storage
+from backend.app.characters import actors
+from backend.app.infrastructure import storage
 import server
-import peer_chat as peer
-import role_actions as actions
-import world_events
+from backend.app.conversations import peer_chat as peer
+from backend.app.runtime import role_actions as actions
+from backend.app.world import world_events
 
 
 def main():
@@ -70,7 +70,7 @@ def main():
                 print('PASS: real hidden question, known-state answer, correlated reply, user followup, permissions and retry deduplication')
                 # The automatic uncertainty path uses the actor's own model as well.
                 with actions.window('owner','default','wan'):
-                    import chat_history
+                    from backend.app.conversations import chat_history
                     chat_history.bootstrap()
                     chat_history.append('unknown-meal',0,'user','小研做的面好了吗？不清楚的话可以向她确认，收到答复再告诉我。')
                 auto=peer.enqueue_inquiry('owner','default','wan','wan','unknown-meal',

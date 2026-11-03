@@ -3,7 +3,7 @@ import asyncio,sys,tempfile
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-import server,storage,role_actions,model_usage
+import server; from backend.app.infrastructure import storage; from backend.app.runtime import role_actions; from backend.app.infrastructure import model_usage
 
 async def main():
     cfg=server.load_config();assert not server.check_cfg(cfg),'Model configuration missing'

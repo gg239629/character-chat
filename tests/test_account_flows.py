@@ -7,17 +7,17 @@ from unittest.mock import patch
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-import accounts
-import model_defaults
-import push_notifications
+from backend.app.accounts import accounts
+from backend.app.characters import model_defaults
+from backend.app.conversations import push_notifications
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class AccountFlowTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
-        self.store=storage.Store('sqlite:///'+(Path(self.tmp.name)/'accounts.db').as_posix())
+        self.store=storage.Store('sqlite:///'+(Path(self.tmp.name)/'backend.app.accounts.accounts.db').as_posix())
         self.store.ensure('owner','default',{'scene_state':{'时间':'原有进度'},'recent_log':[]})
         self.patches=[patch.object(storage,'_STORE',self.store),patch.dict(os.environ,{
             'ENABLE_USER_ACCOUNTS':'true','REGISTRATION_MODE':'invite','REGISTRATION_INVITE_CODE':'test-invite-code-12345',
@@ -50,7 +50,7 @@ class AccountFlowTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/messages',headers={'X-Conversation-ID':'default'}).status_code,200)
         user=accounts.identify(self.client.cookies.get('chat_session'))
         self.assertNotEqual(user,'owner')
-        self.assertEqual(self.store.read(user,accounts.root_id(user))['story_clock']['minute'],480)
+        self.assertIn('realtime_clock',self.store.read(user,accounts.root_id(user)))
         self.assertFalse(self.store.read(user,accounts.root_id(user))['initiative_enabled'])
         accounts.create_owner('admin','admin-password-123')
         self.login('admin','admin-password-123')

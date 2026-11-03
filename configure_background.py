@@ -2,8 +2,8 @@
 import os
 from pathlib import Path
 import secrets
-import secrets_store
-import push_notifications
+from backend.app.infrastructure import secrets_store
+from backend.app.conversations import push_notifications
 
 
 def main():

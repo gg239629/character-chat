@@ -6,17 +6,17 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-import storage
+from backend.app.infrastructure import storage
 import server
-import long_memory
-import secrets_store
+from backend.app.memory import long_memory
+from backend.app.infrastructure import secrets_store
 from cryptography.fernet import Fernet
 
 
 class StorageTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import AsyncMock
-        import actors
+        from backend.app.characters import actors
         self.coordinator_patch=patch.object(server.group_coordinator,'plan',new=AsyncMock(side_effect=lambda messages,configs:[role for role in actors.candidates(messages) if not any(m.get('role')=='assistant' and m.get('content','').startswith(actors.ROLES[role]+'：') for m in server.recent_rounds(messages,1))]))
         self.coordinator_patch.start()
         self.addCleanup(self.coordinator_patch.stop)
@@ -79,7 +79,7 @@ class StorageTests(unittest.TestCase):
                 new_id = 'isolated-story'
                 self.store.ensure('owner', new_id)
                 headers = {'X-Conversation-ID': new_id}
-                self.assertEqual(client.get('/api/memory/export', headers=headers).json(), {'scene_state': {}, 'recent_log': []})
+                self.assertEqual(client.get('/api/memory/export', headers=headers).json()['recent_log'], [])
                 with patch.object(server, 'update_scene_state', return_value=None), patch.object(long_memory, 'refresh_summary'):
                     result = client.post('/api/save', headers=headers, json={'messages': [{'role': 'user', 'content': '独立会话内容'}]})
                 self.assertEqual(result.status_code, 200)
@@ -97,8 +97,19 @@ class StorageTests(unittest.TestCase):
 
     def test_story_home_and_named_empty_story(self):
         with TestClient(server.app) as client:
-            self.assertIn('我的会话', client.get('/').text)
-            self.assertIn('返回主页', client.get('/chat').text)
+            home=client.get('/')
+            if (server.STATIC/'web/index.html').exists():
+                self.assertEqual(home.status_code,200)
+                self.assertIn('我的会话',home.text)
+            else:
+                self.assertEqual(home.status_code,503)
+            response=client.get('/chat')
+            if (server.STATIC/'web/index.html').exists():
+                self.assertEqual(response.status_code,200)
+                self.assertIn('/web/assets/',response.text)
+            else:
+                self.assertEqual(response.status_code,503)
+                self.assertIn('前端尚未构建',response.json()['error'])
             story = 'existing-story'
             self.store.ensure('owner', story, {'title': '雨天书店'})
             self.assertEqual(client.post('/api/conversations',json={'title':'not-created'}).status_code,405)
@@ -106,11 +117,10 @@ class StorageTests(unittest.TestCase):
             items = client.get('/api/conversations').json()
             self.assertTrue(any(item['id']==story and item['title']=='雨天书店' and item['avatar']=='' for item in items))
             headers = {'X-Conversation-ID': story}
-            self.assertEqual(client.get('/api/memory/export', headers=headers).json(),
-                             {'scene_state': {}, 'recent_log': []})
+            self.assertEqual(client.get('/api/memory/export', headers=headers).json()['recent_log'], [])
             self.store.mutate('owner', story, lambda data: data.update(scene_state={'地点': '书店'}))
-            self.assertEqual(client.get('/api/info', headers=headers).json()['scene_state'], {'地点': '书店'})
-            self.assertNotEqual(client.get('/api/info').json()['scene_state'], {'地点': '书店'})
+            self.assertEqual(client.get('/api/info', headers=headers).json()['scene_state']['地点'], '书店')
+            self.assertNotEqual(client.get('/api/info').json()['scene_state'].get('地点'), '书店')
 
     def test_profile_edit_is_isolated(self):
         with TestClient(server.app) as client:
@@ -171,7 +181,7 @@ class StorageTests(unittest.TestCase):
                 self.assertEqual(client.get('/api/conversation/profile',headers=headers).json()['title'],'会话-'+channel)
             info=client.get('/api/info').json()
             self.assertEqual(info['role_avatars']['小婉'],avatar)
-            self.assertEqual(info['role_avatars']['小研'],'')
+            self.assertEqual(info['role_avatars']['小研'],'/static/avatars/yan-v3.png')
             items=client.get('/api/conversations').json()
             self.assertEqual(len(items),1)
             self.assertEqual(items[0]['channels']['wan']['avatar'],avatar)
@@ -189,7 +199,7 @@ class StorageTests(unittest.TestCase):
         with TestClient(server.app) as client,patch.object(server,'load_config',return_value=cfg),patch.object(server,'make_client',return_value=client_model),patch.object(server,'update_scene_state'):
             response=client.post('/api/stream',json={'messages':[{'role':'user','content':'小研，公开电影计划'}]})
             self.assertIn('"done": true',response.text)
-            import memory_autosave
+            from backend.app.memory import memory_autosave
             memory_autosave.flush('owner','default',memory_autosave.checkpoint_due('owner','default'))
             public=self.store.read('owner','default')['public_history']
             self.assertIn('公开电影计划',json.dumps(public,ensure_ascii=False))

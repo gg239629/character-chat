@@ -10,12 +10,12 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-import storage
+from backend.app.infrastructure import storage
 import server
-import actors
-import chat_inbox
-import chat_history
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_inbox
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions
 
 
 def main():

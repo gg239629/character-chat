@@ -1,5 +1,5 @@
 import unittest
-import reply_quality
+from backend.app.characters import reply_quality
 
 class DailyDialogueTests(unittest.TestCase):
     def test_repeated_status_removed_but_new_question_and_action_remain(self):

@@ -9,12 +9,12 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 from cryptography.fernet import Fernet
 import server
-import storage
-from role_routing import LABEL
+from backend.app.infrastructure import storage
+from backend.app.characters.role_routing import LABEL
 
 
 def await_maintenance(store):
-    import maintenance
+    from backend.app.infrastructure import maintenance
     from sqlalchemy import select
     from sqlalchemy.orm import Session
     deadline=time.monotonic()+180
@@ -81,7 +81,7 @@ def main():
                 states=[client.get('/api/info',headers={'X-Chat-Channel':channel}).json()['scene_state'] for channel in ['group','wan','yan','liu']]
                 assert all(state==states[0] for state in states),'World status diverged across windows'
                 print('PASS: real private scene update is identical in all four windows')
-                import maintenance
+                from backend.app.infrastructure import maintenance
                 storage.append_log([{'who':'他' if i%2==0 else '小研','text':str(i)+'：周六去植物园看兰花，还未出发；用户不吃花生。'} for i in range(250)])
                 maintenance.enqueue('owner','default','group','real-archive-job',time.time(),scene=False)
                 await_maintenance(store)

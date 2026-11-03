@@ -9,11 +9,11 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import actors
-import chat_history
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import role_actions
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 def main():

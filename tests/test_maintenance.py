@@ -11,18 +11,18 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import maintenance as work
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.infrastructure import maintenance as work
+from backend.app.runtime import role_actions
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class MaintenanceTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import AsyncMock
-        import actors
+        from backend.app.characters import actors
         self.coordinator_patch=patch.object(server.group_coordinator,'plan',new=AsyncMock(side_effect=lambda messages,configs:[role for role in actors.candidates(messages) if not any(m.get('role')=='assistant' and m.get('content','').startswith(actors.ROLES[role]+'：') for m in server.recent_rounds(messages,1))]))
         self.coordinator_patch.start()
         self.addCleanup(self.coordinator_patch.stop)

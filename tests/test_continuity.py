@@ -1,6 +1,6 @@
 import unittest
 import test_home_settings as fixtures
-import continuity,reply_quality,scene_labels,world_time
+from backend.app.world import continuity; from backend.app.characters import reply_quality; from backend.app.world import scene_labels; from backend.app.world import world_time
 
 class ContinuityTests(unittest.TestCase):
     setUp=fixtures.HomeSettingsTests.setUp

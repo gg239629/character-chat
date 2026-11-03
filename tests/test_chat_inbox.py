@@ -9,12 +9,12 @@ from fastapi.testclient import TestClient
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import storage
+from backend.app.infrastructure import storage
 import server
-import actors
-import chat_history
-import chat_inbox
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.conversations import chat_inbox
+from backend.app.runtime import role_actions
 
 
 class InboxTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class InboxTests(unittest.TestCase):
         for p in self.patches:p.start()
 
     def tearDown(self):
-        import memory_autosave
+        from backend.app.memory import memory_autosave
         memory_autosave.flush_due(force=True)
         for p in reversed(self.patches):p.stop()
         self.store.engine.dispose();self.tmp.cleanup()

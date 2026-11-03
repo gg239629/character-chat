@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({testDir:'./e2e',workers:1,fullyParallel:false,timeout:30000,reporter:'list',outputDir:'../.test-tmp/browser-results',use:{baseURL:'http://127.0.0.1:8799',channel:'msedge',headless:true},webServer:{command:'"../.venv/Scripts/python.exe" ../tests/e2e_server.py',url:'http://127.0.0.1:8799/api/auth/status',reuseExistingServer:false,timeout:60000}});

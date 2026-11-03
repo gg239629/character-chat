@@ -6,17 +6,17 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import actors
-import chat_history
-import secrets_store
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.infrastructure import secrets_store
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class ActorTests(unittest.TestCase):
     def setUp(self):
         from unittest.mock import AsyncMock
-        import actors
+        from backend.app.characters import actors
         self.coordinator_patch=patch.object(server.group_coordinator,'plan',new=AsyncMock(side_effect=lambda messages,configs:[role for role in actors.candidates(messages) if not any(m.get('role')=='assistant' and m.get('content','').startswith(actors.ROLES[role]+'：') for m in server.recent_rounds(messages,1))]))
         self.coordinator_patch.start()
         self.addCleanup(self.coordinator_patch.stop)
@@ -92,7 +92,7 @@ class ActorTests(unittest.TestCase):
                 self.assertEqual([m for m,_ in calls],['model-wan','model-yan','model-liu'])
                 self.assertIn('小婉：周六一起看电影。',json.dumps(calls[1][1],ensure_ascii=False))
                 # The stream only queues maintenance; execute it explicitly for this unit test.
-                import maintenance
+                from backend.app.infrastructure import maintenance
                 from sqlalchemy import select
                 from sqlalchemy.orm import Session
                 with Session(self.store.engine) as db:
@@ -227,7 +227,12 @@ class ActorTests(unittest.TestCase):
         state={'时间':'下午','地点':'厨房','在场人物':'小研','小婉':'未知','小研':'已到厨房，正在喝水','小柳':'未知','主要交谈角色':'小研','上一段停在':'私密约定'}
         model=MagicMock()
         model.__enter__.return_value=model
-        model.chat.completions.create.return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(state,ensure_ascii=False)))])
+        def extract(**kwargs):
+            source=json.loads(kwargs['messages'][1]['content'])['messages'][0]['source_id']
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({'events':[{
+                'source_id':source,'actor':'yan','evidence':'走进厨房喝水','status':'厨房·喝水',
+                'position':{'place':'厨房'}}],'summary':'私密约定'},ensure_ascii=False)))])
+        model.chat.completions.create.side_effect=extract
         world=server.chat_world.set({'id':'default','channel':'yan','data':self.store.read('owner','default')})
         try:
             with actors.role_scope('owner','default','yan'),patch('openai.OpenAI',return_value=model):
@@ -235,12 +240,12 @@ class ActorTests(unittest.TestCase):
         finally:
             server.chat_world.reset(world)
         public=self.store.read('owner','default')
-        self.assertEqual(public['role_states']['yan']['status'],'已到厨房，正在喝水')
+        self.assertEqual(public['role_states']['yan']['status'],'厨房·喝水')
         self.assertNotIn('私密约定',json.dumps(public,ensure_ascii=False))
         _,payload=self._payload('wan',[{'role':'user','content':'你好'}])
-        self.assertNotIn('已到厨房，正在喝水',json.dumps(payload,ensure_ascii=False))
+        self.assertNotIn('厨房·喝水',json.dumps(payload,ensure_ascii=False))
         _,payload=self._payload('yan',[{'role':'user','content':'你好'}])
-        self.assertIn('已到厨房，正在喝水',json.dumps(payload,ensure_ascii=False))
+        self.assertIn('厨房·喝水',json.dumps(payload,ensure_ascii=False))
 
 
     def test_all_windows_share_live_status_ignore_legacy_private_scenes(self):
@@ -274,7 +279,11 @@ class ActorTests(unittest.TestCase):
             role_states={'yan':{'status':'厨房喝水','source':'private'}}))
         state={'时间':'下午','地点':'客厅','小研':'厨房喝水','小婉':'站起身'}
         model=MagicMock();model.__enter__.return_value=model
-        model.chat.completions.create.return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(state,ensure_ascii=False)))])
+        def extract(**kwargs):
+            source=json.loads(kwargs['messages'][1]['content'])['messages'][0]['source_id']
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({'events':[{
+                'source_id':source,'actor':'wan','evidence':'小婉站起身','status':'站起身'}]},ensure_ascii=False)))])
+        model.chat.completions.create.side_effect=extract
         token=server.chat_world.set({'id':'default','channel':'group','data':{}})
         try:
             with patch('openai.OpenAI',return_value=model):
@@ -353,7 +362,7 @@ class ActorTests(unittest.TestCase):
 
 
     def test_all_four_channels_clear_reentry_and_reject_old_browser_reimport(self):
-        import role_actions
+        from backend.app.runtime import role_actions
         with TestClient(server.app) as client:
             for channel in ['group','wan','yan','liu']:
                 with self.subTest(channel=channel),role_actions.window('owner','default',channel):
@@ -382,9 +391,9 @@ class ActorTests(unittest.TestCase):
     def test_clear_handles_clock_skew_and_new_messages_still_appear(self):
         with TestClient(server.app) as client:
             chat_history.bootstrap()
-            with patch('chat_history.time.time',return_value=2000000000):
+            with patch('backend.app.conversations.chat_history.time.time',return_value=2000000000):
                 chat_history.append('future-old',0,'assistant','旧消息','小研')
-            with patch('chat_history.time.time',return_value=1900000000):
+            with patch('backend.app.conversations.chat_history.time.time',return_value=1900000000):
                 self.assertEqual(client.post('/api/messages/clear-display').status_code,200)
                 self.assertEqual(client.get('/api/messages').json()['messages'],[])
                 chat_history.append('future-new',0,'assistant','新消息','小研')

@@ -5,7 +5,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from fastapi.testclient import TestClient
 from cryptography.fernet import Fernet
-import storage,server,continuity,role_actions,chat_history
+from backend.app.infrastructure import storage; import server; from backend.app.world import continuity; from backend.app.runtime import role_actions; from backend.app.conversations import chat_history
 
 def main():
     cfg=server.load_config();assert not server.check_cfg(cfg),'Missing model configuration'

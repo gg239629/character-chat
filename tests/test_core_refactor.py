@@ -6,14 +6,14 @@ from sqlalchemy import select,inspect
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 import test_home_settings as fixtures
-import storage
+from backend.app.infrastructure import storage
 import server
-import accounts
-import chat_history
-import chat_inbox
-import message_service
-import event_memory
-import task_health
+from backend.app.accounts import accounts
+from backend.app.conversations import chat_history
+from backend.app.conversations import chat_inbox
+from backend.app.conversations import message_service
+from backend.app.memory import event_memory
+from backend.app.infrastructure import task_health
 
 
 class CoreTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(message_service.cancels_draft([{'role':'user','content':'先别聊这个，改聊周末','created_at':2}],1))
 
     def test_schema_versions_idempotent_and_history_preserved(self):
-        import schema_migrations
+        from backend.app.infrastructure import schema_migrations
         schema_migrations.upgrade(self.store.engine);schema_migrations.upgrade(self.store.engine)
         self.assertIn('ix_message_channel_clock',{i['name'] for i in inspect(self.store.engine).get_indexes('chat_messages')})
         self.assertEqual(self.store.read('owner','default'),{})

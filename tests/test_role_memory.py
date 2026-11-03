@@ -8,14 +8,14 @@ from types import SimpleNamespace
 from unittest.mock import patch, AsyncMock
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import group_coordinator
-import long_memory
-import role_actions
-import role_memory
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import group_coordinator
+from backend.app.memory import long_memory
+from backend.app.runtime import role_actions
+from backend.app.memory import role_memory
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class RoleMemoryTests(unittest.TestCase):

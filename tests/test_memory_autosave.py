@@ -5,14 +5,14 @@ from pathlib import Path
 from unittest.mock import patch
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-import actors
-import chat_history
-import maintenance
-import memory_autosave as autosave
-import role_actions
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.infrastructure import maintenance
+from backend.app.memory import memory_autosave as autosave
+from backend.app.runtime import role_actions
 import server
-import storage
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world.story_reset import reset_story
 
 
 class MemoryAutosaveTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class MemoryAutosaveTests(unittest.TestCase):
         self.patch.stop();self.store.engine.dispose();self.tmp.cleanup()
 
     def test_minute_checkpoint_batches_and_latest_messages_remain_readable(self):
-        with patch('chat_history.time.time',return_value=120.5):
+        with patch('backend.app.conversations.chat_history.time.time',return_value=120.5):
             chat_history.append('first',0,'user','刚说的内容')
             chat_history.append('second',0,'assistant','小研：我记得','小研')
         raw=self.store.read('owner','default')
@@ -79,7 +79,7 @@ class MemoryAutosaveTests(unittest.TestCase):
         self.assertEqual(chat_history.messages(),[])
 
     def test_overflow_and_archive_checks_run_at_minute_boundary_and_are_coalesced(self):
-        with patch('chat_history.time.time',return_value=120.5):
+        with patch('backend.app.conversations.chat_history.time.time',return_value=120.5):
             for i in range(250):chat_history.append('batch-'+str(i),0,'user' if i%2==0 else 'assistant','消息'+str(i),'' if i%2==0 else '小研')
             for i in range(3):maintenance.enqueue('owner','default','group','round-'+str(i),120.5+i,scene=False)
         with Session(self.store.engine) as db:

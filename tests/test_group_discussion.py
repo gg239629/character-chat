@@ -7,11 +7,11 @@ from types import SimpleNamespace
 from unittest.mock import patch,AsyncMock
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import actors
-import chat_history
-import group_coordinator as coordinator
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
+from backend.app.runtime import group_coordinator as coordinator
 import server
-import storage
+from backend.app.infrastructure import storage
 
 
 class DiscussionFlowTests(unittest.TestCase):

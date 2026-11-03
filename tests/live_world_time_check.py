@@ -7,11 +7,11 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-import actors
-import chat_history
+from backend.app.characters import actors
+from backend.app.conversations import chat_history
 import server
-import storage
-from story_reset import reset_story
+from backend.app.infrastructure import storage
+from backend.app.world.story_reset import reset_story
 
 
 def turn(client,role,identity,text):

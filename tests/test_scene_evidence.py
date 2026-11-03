@@ -1,5 +1,5 @@
 import unittest
-import scene_labels
+from backend.app.world import scene_labels
 
 
 class SceneEvidenceTests(unittest.TestCase):

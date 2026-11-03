@@ -16,3 +16,11 @@ data/
 *.db-*
 # Isolated test databases
 .test-tmp/
+node_modules/
+frontend/.vite/
+static/web/
+
+.venv/
+
+# Editor-local configuration
+.idea/

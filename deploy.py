@@ -3,13 +3,15 @@ import base64
 import os
 import secrets
 from server import app
-import accounts
+from backend.app.accounts import accounts
 
 @app.middleware("http")
 async def require_password(request, call_next):
     from fastapi.responses import Response
     if request.url.path == "/healthz":
         return Response("ok", media_type="text/plain")
+    if request.url.path.startswith('/mcp'):
+        return await call_next(request)  # MCP validates its own revocable Bearer credential.
     if accounts.enabled():
         response=await call_next(request)
         response.headers['Cache-Control']='no-store'

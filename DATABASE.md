@@ -1,10 +1,10 @@
 # 数据库存储与账号隔离
 
-当前阶段保留 FastAPI 和 OpenAI 兼容 SDK，使用 SQLAlchemy 2.x 管理 SQLite / PostgreSQL。检索仍采用本地词片匹配；LangGraph 和语义向量检索尚未引入。
+使用 FastAPI 和 OpenAI 兼容 SDK，SQLAlchemy 2.x 管理 SQLite / PostgreSQL。LangGraph 管理回复执行与群聊调度；可选 LlamaIndex 语义检索与原词法检索融合，默认不开启 Embedding。结构与迁移说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 本地运行
 
-安装 requirements.txt 后启动 server:app。本地默认在 data/chat.db 保存数据库，已加入 Git 和 Docker 忽略列表。
+安装 requirements.lock 后启动 backend.app.main:app（旧 server:app 仍兼容）。本地默认在 data/chat.db 保存数据库，已加入 Git 和 Docker 忽略列表。启动自动执行 Alembic 版本迁移，已有聊天不会因此重置。
 
 旧记忆 JSON 仅在文件存在且默认会话未创建时用于初始化；现在已移除该旧文件。已有数据库不受影响。
 

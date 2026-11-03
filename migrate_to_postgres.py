@@ -6,22 +6,22 @@ from datetime import datetime
 from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from storage import Store, User, Conversation
-from chat_history import Message
-from chat_history import ReadCursor
-from role_actions import Action, Checkpoint
-from push_notifications import Subscription, PushJob
-from maintenance import Job as MaintenanceJob
-from model_usage import Usage
-from peer_chat import Message as PeerMessage, Archive as PeerArchive, Job as PeerJob
-from chat_inbox import Turn as InboxTurn
-from accounts import Account, LoginSession
-from task_health import Failure
-from model_defaults import Defaults as ModelDefaults
+from backend.app.infrastructure.storage import Store, User, Conversation
+from backend.app.conversations.chat_history import Message
+from backend.app.conversations.chat_history import ReadCursor
+from backend.app.runtime.role_actions import Action, Checkpoint
+from backend.app.conversations.push_notifications import Subscription, PushJob
+from backend.app.infrastructure.maintenance import Job as MaintenanceJob
+from backend.app.infrastructure.model_usage import Usage
+from backend.app.conversations.peer_chat import Message as PeerMessage, Archive as PeerArchive, Job as PeerJob
+from backend.app.conversations.chat_inbox import Turn as InboxTurn
+from backend.app.accounts.accounts import Account, LoginSession
+from backend.app.infrastructure.task_health import Failure
+from backend.app.characters.model_defaults import Defaults as ModelDefaults
 
 
 def copy_rows(source_path, destination):
-    import storage, memory_autosave
+    from backend.app.infrastructure import storage; from backend.app.memory import memory_autosave
     engine=storage.get_store().engine
     if engine.dialect.name=='sqlite' and Path(engine.url.database).resolve()==source_path.resolve():
         memory_autosave.flush_due(force=True)
@@ -78,7 +78,7 @@ def main():
     backups = source.parent / "backups"
     backups.mkdir(exist_ok=True)
     backup = backups / ("chat-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".db")
-    import memory_autosave
+    from backend.app.memory import memory_autosave
     memory_autosave.flush_due(force=True)
     with sqlite3.connect(source) as db, sqlite3.connect(backup) as target:
         db.backup(target)

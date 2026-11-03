@@ -9,13 +9,13 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-import storage
-import actors
+from backend.app.infrastructure import storage
+from backend.app.characters import actors
 import server
-import chat_history
-import peer_chat as peer
-import role_actions as actions
-import role_memory
+from backend.app.conversations import chat_history
+from backend.app.conversations import peer_chat as peer
+from backend.app.runtime import role_actions as actions
+from backend.app.memory import role_memory
 
 
 class PeerTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class PeerTests(unittest.TestCase):
             with actors.role_scope('owner','default',actor):pass
 
     def tearDown(self):
-        import memory_autosave
+        from backend.app.memory import memory_autosave
         memory_autosave.flush_due(force=True)
         for p in reversed(self.patches):p.stop()
         self.store.engine.dispose();self.tmp.cleanup()
@@ -69,7 +69,7 @@ class PeerTests(unittest.TestCase):
             for child in (actors.role_id('default','liu'),peer.key('pair','yan','liu')):
                 self.assertEqual(client.get('/api/messages',headers={'X-Conversation-ID':child}).status_code,404)
             self.assertEqual(client.get('/api/messages',headers={'X-Chat-Channel':'peer:liu-yan'}).status_code,400)
-        import push_notifications
+        from backend.app.conversations import push_notifications
         with Session(self.store.engine) as db:
             self.assertEqual(list(db.scalars(select(push_notifications.PushJob))),[])
 
@@ -175,7 +175,7 @@ class PeerTests(unittest.TestCase):
         self.assertEqual(peer.recall('owner','default','wan','植物园兰花计划',5000),[])
 
     def test_reset_clears_hidden_history_jobs_and_archives_with_backup(self):
-        import story_reset
+        from backend.app.world import story_reset
         peer.send('owner','default','yan','liu','旧信息','before-reset')
         result=story_reset.reset_story('owner','default',Path(self.tmp.name)/'backup')
         backup=json.loads(Path(result['backup']).read_text(encoding='utf-8'))
@@ -184,7 +184,7 @@ class PeerTests(unittest.TestCase):
         with Session(self.store.engine) as db:self.assertEqual(list(db.scalars(select(peer.Job))),[])
 
     def test_legacy_peer_messages_move_without_replaying_or_losing_user_history(self):
-        import memory_autosave
+        from backend.app.memory import memory_autosave
         action=actions.insert_action('owner','default','yan','liu','autonomous','legacy',
             {'decision':'send','message':'小研：旧的角色私信'})
         with actions.window('owner','default','liu'):

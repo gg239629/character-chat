@@ -2,7 +2,7 @@ import asyncio,json,unittest
 from types import SimpleNamespace as S
 from unittest.mock import patch,AsyncMock
 import test_home_settings as fixtures
-import model_json,role_actions,server
+from backend.app.infrastructure import model_json; from backend.app.runtime import role_actions; import server
 
 class JsonTests(unittest.TestCase):
     setUp=fixtures.HomeSettingsTests.setUp
@@ -37,7 +37,7 @@ class JsonTests(unittest.TestCase):
         with patch.object(server,'make_client',return_value=client),self.assertRaises(model_json.ModelOutputTruncated):
             asyncio.run(role_actions.ask_json({'model':'json-test','api_key':'fake'},'输出JSON',{}))
     def test_old_error_is_marked_recovered_only_after_task_succeeds(self):
-        import peer_chat,task_health
+        from backend.app.conversations import peer_chat; from backend.app.infrastructure import task_health
         from sqlalchemy.orm import Session
         task=peer_chat.queue('owner','default','wan','followup','recovery',{})
         task_health.record('owner','default',task,'peer_followup',json.JSONDecodeError('invalid','',0),2,5300)
