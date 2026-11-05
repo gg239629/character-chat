@@ -356,24 +356,27 @@ def actor_payload(role, messages, group):
         selection=context_budget.topic.set(query)
         try:stable, _ = services.prompts().build_prompt_parts(role)
         finally:context_budget.topic.reset(selection)
-        current_context=context_budget.dialogue_window(messages)
+        current_context=context_budget.dialogue_window(role_memory.recent_dialogue(user,world['id'],role,messages,group))
         receipt_fact=role_actions.received_contact_status(user,world['id'],role,
             next((m.get('content','') for m in reversed(messages) if m['role']=='user'),''))
         query=role_memory.query_for(messages)
         memory=role_memory.remember(user,world['id'],role,query,group,
             exclude_ids=[m['id'] for m in current_context if m.get('id')],
-            exclude_texts=[m.get('content','') for m in current_context]) if context_budget.needs_recall(query) else {'events':[]}
+            exclude_texts=[m.get('content','') for m in current_context])
         from backend.app.world import actor_context
         facts,history,communication=actor_context.build(user,world['id'],role,query,current_context)
         payload=[{'role':'system','content':stable},
             {'role':'system','content':'当前事实与明确设定：'+json.dumps(facts,ensure_ascii=False,separators=(',',':'))+
-             '\n时间以当前事实为准。stale仅表示最后观察可能过时，不证明活动完成或位置改变；未知保持未知。'},
+             '\n本人状态和recent_actions来自所有本人参与窗口的共享事实；它们比当前窗口旧消息更新时，不能继续沿用旧动作。记得自己的动作不等于可以公开私聊内容。\n时间以当前事实为准。stale仅表示最后观察可能过时，不证明活动完成或位置改变；未知保持未知。'},
             {'role':'system','content':role_memory.render(memory) if memory['events'] else '当前无需额外历史检索，以近期原文及明确设定为准。'}]
         if history:
             payload.append({'role':'system','content':'本轮相关历史证据（历史动作不等于当前仍在进行；听说不等于亲历）：'+json.dumps(history,ensure_ascii=False,separators=(',',':'))})
         if communication:
             payload.append({'role':'system','content':'真实通信执行结果（sent仅证明投递，不证明已读、回复或新请求已执行）：'+json.dumps(communication,ensure_ascii=False,separators=(',',':'))})
         if receipt_fact:payload.append({'role':'system','content':'已核实的通信事实，用本人自然口吻回答：'+receipt_fact})
+        if group:
+            from backend.app.runtime.goal_mode import active_goal
+            if active_goal.get():payload.append({'role':'system','content':'本轮群聊围绕用户目标自然交流：'+active_goal.get()+'。只推进有价值的新内容，保留本人的性格和判断，不强行赞同，不向用户播报目标判断或达成状态。'})
         payload += [{'role':m['role'],'content':m['content']} for m in current_context]
         from backend.app.characters import actor_instructions
         payload.append({'role':'system','content':actor_instructions.render(name,group,persona,relationship)})
@@ -395,7 +398,7 @@ async def chat_stream(body: ChatIn):
     world = chat_world.get() or {"id":storage.scope.get()[1],"channel":"group","data":storage.current_data()}
     await asyncio.to_thread(world_events.ensure,storage.scope.get()[0],world['id'])
     group = world["channel"] == "group"
-    history = [{"id":m["id"],"role":m["role"],"content":m["content"]} for m in existing]
+    history = [dict(m) for m in existing]
     if not chat_inbox.processing.get():
         history.append({"id":chat_history.identity(storage.scope.get()[1],body.request_id,0),"role":"user","content":current})
     targets = actors.candidates(history) if group else [world["channel"]]
@@ -444,7 +447,7 @@ async def chat_stream(body: ChatIn):
             async def private_speakers():
                 for role in targets:yield role
             stream_roles=group_coordinator.speakers(history,prepared,requested_roles) if group else private_speakers()
-            index=0;handled_requests=set()
+            index=0;handled_requests=set();image_requested=False
             async for role in stream_roles:
                 latest_history=await asyncio.to_thread(chat_history.messages)
                 if any(m['role']=='user' and m['id']!=chat_history.identity(storage.scope.get()[1],body.request_id,0)
@@ -455,7 +458,7 @@ async def chat_stream(body: ChatIn):
                 yield services.generation().sse({"status": "正在等待群聊回应…" if group else name + "正在回复…", "speaker":name})
                 cfg, payload = await asyncio.to_thread(services.generation().actor_payload,role,history,group)
                 cross=role_actions.resolve_target(history,role,world['channel']) if (not group or role in requested_roles) and role not in handled_requests else None
-                action=None
+                action=None;voice_job=None
                 if cross:
                     handled_requests.add(role)
                     action=await role_actions.requested(role,cross,history,
@@ -493,11 +496,20 @@ async def chat_stream(body: ChatIn):
                 else:
                     client = services.models().make_client(cfg)
                     raw = ""
+                    tool_calls={};voice_job=None
+                    from backend.app.characters import image_tools,voice_generation
                     interruption_check=0
                     prefix = "\n\n" if completed else ""
                     try:
                         with model_usage.Measure('character',cfg,payload) as metric:
                             options=services.models().make_kwargs(cfg,body)
+                            if chat_inbox.processing.get() and not image_requested:
+                                tools=[image_tools.TOOL]
+                                allow_voice=await asyncio.to_thread(voice_generation.available,storage.scope.get()[0],world['id'],world['channel'],role,current)
+                                if allow_voice and group:tools.append(voice_generation.TOOL)
+                                options.update(tools=tools,tool_choice='auto')
+                                payload=[*payload,{'role':'system','content':image_tools.INSTRUCTIONS+(('\n'+voice_generation.INSTRUCTIONS) if allow_voice and group else '\n直接以本人自然口吻回复，不要假装发送语音；私聊的回复方式由用户设置控制。')}]
+
                             if os.getenv('MODEL_STREAM_USAGE','true').lower() in ('true','1','yes'):
                                 options['stream_options']={'include_usage':True}
                             try:
@@ -516,10 +528,11 @@ async def chat_stream(body: ChatIn):
                                         break
                                 metric.observe(chunk)
                                 if not chunk.choices:continue
+                                image_tools.collect(tool_calls,getattr(chunk.choices[0].delta,'tool_calls',None))
                                 piece=chunk.choices[0].delta.content or ''
                                 if piece:
                                     raw+=piece
-                                    if not group:
+                                    if not group and not chat_inbox.processing.get():
                                         yield services.generation().sse({'delta':prefix+piece,'speaker':name})
                                         prefix=''
                             metric.output(raw)
@@ -532,6 +545,38 @@ async def chat_stream(body: ChatIn):
                         newest=await asyncio.to_thread(chat_history.messages,1)
                         if message_service.cancels_draft(newest,user_record['created_at']):
                             break
+                    if not tool_calls and not image_requested and chat_inbox.processing.get() and image_tools.INTERNAL_MARKER.search(raw):
+                        try:
+                            raw,tool_calls=await image_tools.repair(cfg,payload,raw)
+                        except Exception:
+                            raw=image_tools.visible_text(raw)
+                    if tool_calls and any(call['name']=='send_voice' for call in tool_calls.values()):
+                        try:
+                            voice_job=await asyncio.to_thread(voice_generation.enqueue,body.request_id,role,tool_calls,current)
+                            raw=voice_job['text']
+                        except Exception:
+                            try:raw=voice_generation.spoken(json.loads(next(iter(tool_calls.values()))['arguments']).get('text',''))
+                            except Exception:raw=''
+                        tool_calls={}
+                    if tool_calls:
+                        image_requested=True
+                        try:
+                            job=await asyncio.to_thread(image_tools.enqueue,body.request_id,tool_calls)
+                            image_tools.start(job)
+                            result={'status':job['status']}
+                        except Exception:
+                            result={'status':'failed'}
+                        try:
+                            raw=await image_tools.reply(cfg,payload,tool_calls,result)
+                        except Exception:
+                            # The task remains visible even if the optional role
+                            # continuation fails; never replace it with canned speech.
+                            raw=''
+                        if not raw.strip():continue
+                    # Only the image service may publish durable image identifiers.
+                    raw=image_tools.visible_text(raw)
+                    raw=re.sub(r'\[\[(?:voice|action:voice)[^\]\n]*\]\]','',raw)
+                    if not raw.strip():continue
                     text = actors.normalize_reply(raw,name)
                     facts=await asyncio.to_thread(world_events.knowledge,storage.scope.get()[0],world['id'],role)
                     if world_events.fake_delivery(text):
@@ -559,8 +604,20 @@ async def chat_stream(body: ChatIn):
                     latest_history=await asyncio.to_thread(chat_history.messages)
                     if message_service.cancels_draft(latest_history,user_record['created_at']):
                         break  # Discard unsent stale model text; next turn uses the interruption.
+                if not group and not voice_job and chat_inbox.processing.get():
+                    from backend.app.characters import voice_generation
+                    use_voice=await asyncio.to_thread(voice_generation.available,storage.scope.get()[0],world['id'],world['channel'],role,current)
+                    if use_voice and voice_generation.spoken(text):
+                        try:
+                            calls={0:{'name':'send_voice','arguments':json.dumps({'text':text,
+                                'style':'根据本人这句回复的情绪，调整语速、停顿和语气，括号仅作为表演参考，不要朗读动作：'+text[:700]},ensure_ascii=False)}}
+                            voice_job=await asyncio.to_thread(voice_generation.enqueue,body.request_id,role,calls,current)
+                        except Exception:pass  # Configuration failures retain the ordinary reply.
+                if voice_job:
+                    text=await asyncio.to_thread(voice_generation.attach,voice_job,text)
                 metadata={'source':'role_action','action_id':action['id']} if action else None
                 await asyncio.to_thread(chat_history.append,body.request_id,index,"assistant",text,name,True,metadata)
+                if voice_job:voice_generation.start(voice_job)
                 completed.append(text)
                 history.append({"id":chat_history.identity(storage.scope.get()[1],body.request_id,index),"role":"assistant","content":text})
                 yield services.generation().sse({"replace":"\n\n".join(completed)})
@@ -596,6 +653,9 @@ async def chat_stream(body: ChatIn):
             yield services.generation().sse({"replace":"\n\n".join(completed)})
             yield services.generation().sse({"error":services.models().friendly_error(exc),"messages":await asyncio.to_thread(chat_history.visible_messages)})
         finally:
+            if group:
+                from backend.app.runtime.goal_mode import active_goal
+                active_goal.set('')
             await asyncio.to_thread(chat_history.release,body.request_id)
 
     return StreamingResponse(gen(),media_type="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})

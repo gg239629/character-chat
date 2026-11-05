@@ -173,6 +173,12 @@ def insert_action(user,world,actor,target,kind,source,decision,now=None):
         if target==actor:raise ValueError('Cannot send a peer message to self')
         detail['audience']=[actor,target]
         detail['disclosure']='participants-only'
+    if kind=='autonomous' and target in ('user','group'):
+        from backend.app.characters import image_tools
+        image_prompt=decision.get('image_prompt') or image_tools.legacy_photo(content)
+        if isinstance(image_prompt,str) and image_prompt.strip() and len(image_prompt)<=4000:
+            detail['image_prompt']=image_prompt.strip()
+        detail['message']=image_tools.visible_text(content)
     physical=decision.get('_physical_event')
     if isinstance(physical,dict):detail['physical_event']=physical
     task=decision.get('_recipient_task')
@@ -336,6 +342,7 @@ def finish(identity,status,extra=None):
 async def deliver(identity):
     """Idempotent message IDs survive process crashes between send and action commit."""
     from backend.app.runtime import initiative_control
+    from backend.app.core import services
     started=time.monotonic()
     with Session(storage.get_store().engine) as db:
         pending=db.get(Action,identity)
@@ -359,16 +366,37 @@ async def deliver(identity):
         from backend.app.conversations import peer_chat
         transport=await asyncio.to_thread(message_service.deliver,user,world,actor,target,detail['message'],
             peer_chat.key('action',identity) if target in actors.ROLES else identity,identity)
+        if transport.get('status')=='cancelled':
+            return {'id':identity,'status':'cancelled','detail':{**detail,'suppressed_reason':'repeated_initiative'}}
         mid=transport['id'];inserted=transport['inserted']
+        if kind=='autonomous' and target in ('user','group') and detail.get('image_prompt'):
+            from backend.app.characters import image_tools
+            from backend.app.core import services
+            with window(user,world,channel):
+                try:
+                    calls={0:{'name':'generate_image','arguments':json.dumps(
+                        {'prompt':detail['image_prompt'],'actor':actor},ensure_ascii=False)}}
+                    job=await asyncio.to_thread(image_tools.enqueue,'action-'+identity,calls)
+                    image_tools.start(job)
+                    with Session(storage.get_store().engine) as db:
+                        action=db.get(Action,identity)
+                        action.detail={**action.detail,'image_job_id':job['id']};db.commit()
+                except Exception as error:
+                    from backend.app.infrastructure import task_health
+                    task_health.record(user,world,identity,'initiative_image',error,attempt,0)
+
         if target in actors.ROLES:
             return {'id':identity,'status':'sent','target':target,'detail':{**detail,'message_id':mid}}
         with window(user,world,channel):
             from backend.app.world import world_events
-            record={'id':mid,'role':'assistant','content':detail['message'],'speaker':actors.ROLES[actor],
-                    'created_at':time.time()}
+            record=next((m for m in chat_history.messages(50) if m['id']==mid),None)
+            if record is None:raise RuntimeError('Delivered message unavailable')
             try:
                 await asyncio.to_thread(world_events.capture,user,world,channel,record,detail.get('physical_event'))
                 await asyncio.to_thread(world_events.delivery,user,world,actor,target,mid,detail['message'],record['created_at'])
+                from backend.app.infrastructure import maintenance
+                await asyncio.to_thread(maintenance.enqueue,user,world,channel,mid,record['created_at'],True)
+                services.generation().wake_maintenance()
             except Exception as error:
                 from backend.app.infrastructure import task_health
                 task_health.record(user,world,identity,'action_event',error,attempt,int((time.monotonic()-started)*1000))

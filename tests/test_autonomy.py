@@ -53,7 +53,9 @@ class AutonomyTests(unittest.TestCase):
     def test_no_daily_quota_no_unanswered_block_and_model_selects_target(self):
         plan={'decision':'send','target':'user','message':'小研：刚想起你刚说的话。','next_check_seconds':0}
         with patch.object(actions,'ask_json',new=AsyncMock(return_value=plan)):
-            for _ in range(8):self.assertEqual(asyncio.run(actions.autonomous('owner','default','yan'))['status'],'sent')
+            for i in range(8):
+                plan['message']='小研：新的进展'+str(i)
+                self.assertEqual(asyncio.run(actions.autonomous('owner','default','yan'))['status'],'sent')
         with actions.window('owner','default','yan'):self.assertEqual(len(chat_history.messages()),9)
 
     def test_public_generation_cannot_see_private_plans_or_relationship(self):
@@ -90,3 +92,58 @@ class AutonomyTests(unittest.TestCase):
             with actions.window('owner','default','yan'):chat_history.append('wake',0,'user','刚发生了一件新事情')
             self.assertIsNotNone(asyncio.run(actions.autonomous('owner','default','yan')))
             self.assertEqual(len(seen),3)
+
+    def test_repeated_initiative_is_cancelled_but_new_user_turn_can_be_answered(self):
+        original='小研：（松了口气）起来了就好，我刚才都打算再催你一次了……那接下来这会儿，是归我的吧。'
+        variant='小研：（揪着袖子晃了晃）起来了就好，我刚才都打算再催你一次了……那接下来这会儿，是归我的吧。'
+        def send(source,message,kind='autonomous'):
+            action=actions.insert_action('owner','default','yan','user',kind,source,{'decision':'send','message':message})
+            return asyncio.run(actions.deliver(action['id']))
+        self.assertEqual(send('original',original)['status'],'sent')
+        self.assertEqual(send('duplicate',original)['status'],'cancelled')
+        self.assertEqual(send('cosmetic',variant)['status'],'cancelled')
+        with actions.window('owner','default','yan'):
+            self.assertEqual(len(chat_history.messages()),2)
+            chat_history.append('new-user',0,'user','你刚才说什么？再说一次')
+        self.assertEqual(send('new-turn',original)['status'],'sent')
+        # Explicit user-authorized deliveries retain their exact wording.
+        self.assertEqual(send('requested',original,'requested')['status'],'sent')
+
+    def test_initiative_dedup_does_not_suppress_new_content_or_other_channels(self):
+        from backend.app.characters.reply_quality import repeated_initiative
+        history=[{'role':'assistant','speaker':'小研','content':'小研：我已经到家了，今天路上看到一只小猫。'}]
+        self.assertTrue(repeated_initiative(history[0]['content'],'小研',history))
+        self.assertFalse(repeated_initiative(history[0]['content'],'小婉',history))
+        self.assertFalse(repeated_initiative('小研：我给你留了一块蛋糕，记得回来尝尝。','小研',history))
+
+    def test_autonomous_photo_creates_real_job_without_exposing_prompt(self):
+        from backend.app.characters import image_generation as images,image_tools
+        images.save_settings('owner',dict(enabled=True,inherit_connection=True,model='image',base_url='',api_key=''))
+        plan={'decision':'send','target':'user','message':'小研：等我擦擦手，给你看看。','image_prompt':'厨房里本人入镜的自拍','next_check_seconds':60}
+        with patch.object(actions,'ask_json',new=AsyncMock(return_value=plan)),patch.object(image_tools,'start'):
+            result=asyncio.run(actions.autonomous('owner','default','yan'))
+            self.assertEqual(result['status'],'sent')
+            asyncio.run(actions.deliver(result['id']))
+        with actions.window('owner','default','yan'):
+            jobs=images.recent('owner','default','yan')
+            self.assertEqual(len(jobs),1)
+            self.assertEqual(jobs[0]['prompt'],'厨房里本人入镜的自拍')
+            messages=chat_history.messages()
+            self.assertEqual(len(messages),2)
+            self.assertNotIn('厨房里本人入镜的自拍',messages[-1]['content'])
+
+    def test_legacy_autonomous_photo_marker_is_converted_to_private_plan(self):
+        action=actions.insert_action('owner','default','yan','user','autonomous','legacy-photo',
+            {'decision':'send','message':'小研：行，就一张。\n[[action:image]]\n（厨房里的自拍）'})
+        self.assertEqual(action['detail']['message'],'小研：行，就一张。')
+        self.assertEqual(action['detail']['image_prompt'],'厨房里的自拍')
+
+    def test_autonomous_message_queues_semantic_state_update(self):
+        from backend.app.infrastructure import maintenance
+        plan={'decision':'send','target':'user','message':'小研：（把茶杯放回桌上）刚泡的，尝尝？','next_check_seconds':60}
+        with patch.object(actions,'ask_json',new=AsyncMock(return_value=plan)):
+            result=asyncio.run(actions.autonomous('owner','default','yan'))
+        self.assertEqual(result['status'],'sent')
+        with Session(self.store.engine) as db:
+            jobs=list(db.scalars(__import__('sqlalchemy').select(maintenance.Job).where(maintenance.Job.kind=='scene')))
+        self.assertEqual(len(jobs),1);self.assertEqual(jobs[0].channel,'yan')

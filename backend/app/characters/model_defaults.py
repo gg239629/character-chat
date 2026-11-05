@@ -12,12 +12,12 @@ class Defaults(storage.Base):
 def read(user):
     with Session(storage.get_store().engine) as db:
         row=db.get(Defaults,user)
-        return secrets_store.decode_settings(row.settings) if row else {}
+        return secrets_store.decode_settings({k:v for k,v in row.settings.items() if k!='speech'}) if row else {}
 
 def save(user,settings):
     encoded=secrets_store.encode_settings(settings)
     with Session(storage.get_store().engine) as db:
         row=db.get(Defaults,user)
-        if row:row.settings=encoded
+        if row:row.settings={**encoded,**({'speech':row.settings['speech']} if 'speech' in row.settings else {})}
         else:db.add(Defaults(user_id=user,settings=encoded))
         db.commit()

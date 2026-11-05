@@ -114,5 +114,65 @@ class InboxTests(unittest.TestCase):
                 self.assertEqual(ids,{last['id'],private['id']})
                 self.assertNotIn(first['id'],ids)
 
+    def test_image_tool_is_streamed_after_user_message_is_durable_and_idempotent(self):
+        from backend.app.characters import image_generation as images,image_tools
+        images.save_settings('owner',dict(enabled=True,inherit_connection=True,model='image-model',base_url='',api_key=''))
+        captured=[]
+        async def create(**kwargs):
+            captured.append(kwargs)
+            if not kwargs.get('stream'):
+                self.assertNotIn('tools',kwargs)
+                self.assertTrue(any(m['role']=='tool' for m in kwargs['messages']))
+                return S(choices=[S(message=S(content='小研：等一下，我挑个好看的角度。'))])
+            with Session(self.store.engine) as db:
+                self.assertEqual(len(list(db.scalars(select(chat_history.Message).where(chat_history.Message.role=='user')))),1)
+            async def chunks():
+                for name,args in [('generate_image','{"prompt":"阳台自拍",'),(None,'"actor":"wan"}')]:
+                    yield S(choices=[S(delta=S(content=None,tool_calls=[S(index=0,function=S(name=name,arguments=args))]))])
+            return chunks()
+        model=S(chat=S(completions=S(create=create)),close=AsyncMock())
+        with TestClient(server.app) as client:
+            headers={'X-Chat-Channel':'yan'}
+            accepted=client.post('/api/send',headers=headers,json={'request_id':'image-tool','messages':[{'role':'user','content':'发一张当前状态的图片'}]}).json()
+            with patch.object(server,'make_client',return_value=model),patch.object(image_tools,'start') as start:
+                asyncio.run(chat_inbox.process(accepted['id']))
+                self.assertEqual(start.call_count,1)
+            self.assertEqual(captured[0]['tools'][0]['function']['name'],'generate_image')
+            self.assertEqual(client.get('/api/send/'+accepted['id'],headers=headers).json()['status'],'done')
+            messages=client.get('/api/messages',headers=headers).json()['messages']
+            self.assertEqual(len([m for m in messages if m['role']=='user']),1)
+            self.assertIn('我挑个好看的角度',messages[-1]['content'])
+            self.assertNotIn('阳台自拍',messages[-1]['content'])
+            with role_actions.window('owner','default','yan'):
+                jobs=images.recent('owner','default','yan')
+                self.assertEqual(len(jobs),1);self.assertEqual(jobs[0]['actor'],'yan')
+                again=image_tools.enqueue('image-tool',{0:{'name':'generate_image','arguments':'{"prompt":"不同重试描述"}'}})
+                self.assertEqual(again['id'],jobs[0]['id'])
+
+    def test_tool_provider_failure_keeps_accepted_user_message(self):
+        model=S(chat=S(completions=S(create=AsyncMock(side_effect=RuntimeError('tools unsupported')))),close=AsyncMock())
+        with TestClient(server.app) as client:
+            headers={'X-Chat-Channel':'yan'}
+            accepted=client.post('/api/send',headers=headers,json={'request_id':'provider-failure','messages':[{'role':'user','content':'你能生图吗？不要发图片。'}]}).json()
+            with patch.object(server,'make_client',return_value=model):asyncio.run(chat_inbox.process(accepted['id']))
+            messages=client.get('/api/messages',headers=headers).json()['messages']
+            self.assertEqual([m['content'] for m in messages],['你能生图吗？不要发图片。'])
+            self.assertEqual(client.get('/api/send/'+accepted['id'],headers=headers).json()['status'],'failed')
+
+    def test_capability_questions_and_negation_can_reply_without_creating_image_jobs(self):
+        from backend.app.characters import image_generation as images
+        async def create(**kwargs):
+            self.assertEqual(kwargs['tool_choice'],'auto')
+            async def chunks():yield S(choices=[S(delta=S(content='小研：可以，需要时告诉我就好。'))])
+            return chunks()
+        model=S(chat=S(completions=S(create=create)),close=AsyncMock())
+        with TestClient(server.app) as client:
+            headers={'X-Chat-Channel':'yan'}
+            for index,text in enumerate(['你能生图吗？','不要发图片']):
+                accepted=client.post('/api/send',headers=headers,json={'request_id':'plain-'+str(index),'messages':[{'role':'user','content':text}]}).json()
+                with patch.object(server,'make_client',return_value=model):asyncio.run(chat_inbox.process(accepted['id']))
+            self.assertEqual(len(client.get('/api/messages',headers=headers).json()['messages']),4)
+            with role_actions.window('owner','default','yan'):self.assertEqual(images.recent('owner','default','yan'),[])
+
 
 if __name__=='__main__':unittest.main()

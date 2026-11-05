@@ -34,7 +34,7 @@ class RoleMemoryTests(unittest.TestCase):
         chat_history.bootstrap()
         for i in range(30):chat_history.append('public-'+str(i),0,'assistant','公共讨论植物园兰花'+str(i),'小研')
         for group in [True,False]:
-            memory=role_memory.remember('owner','default','wan','私密密码-yan',group)
+            memory=role_memory.remember('owner','default','wan','私密密码-yan',group,budget=14000)
             text=json.dumps(memory,ensure_ascii=False)
             self.assertNotIn('私密密码-yan',text);self.assertNotIn('私密密码-liu',text)
             self.assertIn('私密密码-wan',text)
@@ -42,7 +42,7 @@ class RoleMemoryTests(unittest.TestCase):
             self.assertTrue(all(event['channel'] in ['group','wan'] for event in memory['events']))
         public=role_memory.remember('owner','default','wan','植物园兰花',False)
         private=role_memory.remember('owner','default','wan','私密密码-wan',False)
-        self.assertGreater(public['public_share'],private['public_share'])
+        self.assertEqual(public['events'],private['events'])
         self.assertTrue(any(event['channel']=='group' for event in public['events']))
 
     def test_per_role_preferences_are_independent_and_archives_keep_provenance(self):
@@ -51,7 +51,8 @@ class RoleMemoryTests(unittest.TestCase):
                 storage.write_document('memory_preferences',{'group_public':pref})
         a=role_memory.remember('owner','default','wan','无关话题',True)
         b=role_memory.remember('owner','default','yan','无关话题',True)
-        self.assertGreater(a['public_share'],b['public_share'])
+        self.assertNotIn('public_share',a)
+        self.assertNotIn('public_share',b)
         with actors.role_scope('owner','default','wan'):
             storage.write_document('pending_archive',[{'id':str(i),'who':'他' if i%2==0 else '小婉','text':'约好去植物园看兰花','saved_at':'2026-11-01T08:00:00+08:00','action_id':'linked-event'} for i in range(50)])
             fake=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({'summary':'私聊里约好去植物园看兰花，尚未出发。','facts':['约好去植物园看兰花。']},ensure_ascii=False)))])
@@ -89,3 +90,30 @@ class RoleMemoryTests(unittest.TestCase):
     def test_empty_coordinator_order_is_valid_and_does_not_force_a_speaker(self):
         with role_actions.window('owner','default','group'),patch.object(server,'load_config',return_value={'api_key':'fake','model':'test'}),patch.object(role_actions,'ask_json',new=AsyncMock(return_value={'order':[]})):
             self.assertEqual(asyncio.run(group_coordinator.plan([{'role':'user','content':'不用回复'}],{'wan':({'api_key':'fake','model':'test'},[])})),[])
+
+    def test_latest_messages_win_independent_of_channel_and_legacy_preferences(self):
+        with actors.role_scope('owner','default','wan'):
+            storage.write_document('memory_preferences',{'group_public':.85,'private_public':.15})
+        with role_actions.window('owner','default','group'):
+            chat_history.append('old-public',0,'user','旧群聊'+('甲'*900))
+        with role_actions.window('owner','default','wan'):
+            chat_history.append('new-private',0,'user','最新私聊'+('乙'*900))
+        for group in [True,False]:
+            memory=role_memory.remember('owner','default','wan','旧群聊',group,budget=700)
+            self.assertEqual(len(memory['events']),1)
+            self.assertEqual(memory['events'][0]['channel'],'wan')
+            self.assertTrue(memory['events'][0]['text'].startswith('最新私聊'))
+            self.assertLessEqual(sum(memory['used'].values()),700)
+
+    def test_recent_dialogue_merges_send_order_and_excludes_other_private_channels(self):
+        with role_actions.window('owner','default','group'):
+            chat_history.append('group-recent',0,'user','较新的群消息')
+        with role_actions.window('owner','default','wan'):
+            chat_history.append('private-latest',0,'user','最新本人私聊')
+            current=chat_history.messages()
+        result=role_memory.recent_dialogue('owner','default','wan',current,False)
+        self.assertEqual(result[-1]['content'],'最新本人私聊')
+        self.assertTrue(result[-2]['content'].startswith('【来自群聊】'))
+        text=json.dumps(result,ensure_ascii=False)
+        self.assertNotIn('私密密码-yan',text);self.assertNotIn('私密密码-liu',text)
+        self.assertEqual(len({m['id'] for m in result}),len(result))

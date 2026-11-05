@@ -24,18 +24,44 @@ async def speakers(messages,configs,required=()):
         token=discussion_state.set(public)
         try:return await plan(messages,configs)
         finally:discussion_state.reset(token)
+    from backend.app.core.context import chat_world
+    from backend.app.runtime import goal_mode
+    world=chat_world.get()
+    enabled=bool(world and world['channel']=='group' and storage.get_store().read(storage.scope.get()[0],world['id']).get('goal_mode',False))
+    topic=next((m.get('content','') for m in reversed(messages) if m.get('role')=='user'),'')
+    goal=''
+    goal_token=goal_mode.active_goal.set('') if enabled else None
     graph=build(nominate,MAX_MESSAGES,MAX_ATTEMPTS)
     state={'pending':[],'declined':[],'last':None,'emitted':0,'attempts':0,
            'required':list(dict.fromkeys(required)),'role':None,'forced':False}
-    while True:
-        state=await graph.ainvoke(state,{'recursion_limit':8})
-        role=state['role']
-        if role is None:return
-        before=len(messages)
-        yield role
-        if len(messages)>before:
-            state.update(emitted=state['emitted']+1,last=role,declined=[],pending=[])
-        else:state['declined']=list(set(state['declined'])|{role})
+    try:
+        while True:
+            if enabled:
+                decision=await goal_mode.judge(goal,topic,messages,{
+                    'last_speaker':state['last'],'messages_this_exchange':state['emitted'],
+                    'remaining_message_budget':MAX_MESSAGES-state['emitted']})
+                if not goal:
+                    goal=decision.goal
+                    goal_mode.active_goal.set(goal)
+                if decision.status!='continue':return
+                state['pending']=list(decision.order)
+                if not state['pending'] and not state['required']:return
+            state=await graph.ainvoke(state,{'recursion_limit':8})
+            role=state['role']
+            if role is None:return
+            before=len(messages)
+            yield role
+            if len(messages)>before:
+                state.update(emitted=state['emitted']+1,last=role,declined=[],pending=[])
+            else:state['declined']=list(set(state['declined'])|{role})
+    finally:
+        if goal_token is not None:
+            try:goal_mode.active_goal.reset(goal_token)
+            except ValueError:
+                # Async-generator finalization may run in a cleanup context.
+                # The owning reply generator also clears its request context.
+                goal_mode.active_goal.set('')
+
 
 
 class Plan(BaseModel):

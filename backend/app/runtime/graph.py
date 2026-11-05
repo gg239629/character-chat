@@ -108,7 +108,8 @@ def compiled(resource):
     with _resource_lock:
         if resource['graph'] is not None:return resource['graph']
         builder=StateGraph(TurnState)
-        builder.add_node('validate',validate);builder.add_node('character_exchange',generate)
+        builder.add_node('validate',validate);
+        builder.add_node('character_exchange',generate)
         builder.add_edge(START,'validate')
         builder.add_conditional_edges('validate',lambda state:'stop' if state['status'] in ('missing','done','superseded','failed') else 'run',{'stop':END,'run':'character_exchange'})
         builder.add_edge('character_exchange',END)

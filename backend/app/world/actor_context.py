@@ -16,6 +16,16 @@ def build(user,world,actor,query,messages=()):
                 'validity':state.get('validity','stale' if state.get('source')=='elapsed_activity' else 'confirmed'),
                 'source_id':state.get('source_id')},
         **continuity.context(user,world,actor)}
+    # A character remembers its own physical actions across windows, without
+    # loading anyone else's private transcript or treating old dialogue as current.
+    with Session(storage.get_store().engine) as db:
+        own=db.scalars(select(state_events.Event).where(state_events.Event.user_id==user,
+            state_events.Event.world_id==world,state_events.Event.actor==actor,
+            state_events.Event.kind.in_(['action','state']),
+            state_events.Event.occurred_at>data.get('memory_reset_at',0))
+            .order_by(state_events.Event.occurred_at.desc()).limit(4))
+        facts['self']['recent_actions']=[{'action':r.detail.get('text','')[:300],
+            'time':r.occurred_at} for r in own]
     physical=world_events.knowledge(user,world,actor)
     if physical:facts['known_world_facts']=physical
     recall=bool(re.search(r'记得|以前|之前|上次|刚才|昨天|约定|答应|包裹|快递|礼物|钥匙|哪里|在哪|做了|干了|怎么|为什么',query))

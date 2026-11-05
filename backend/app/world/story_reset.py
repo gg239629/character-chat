@@ -17,7 +17,7 @@ from backend.app.infrastructure import storage
 from backend.app.conversations import peer_chat
 from backend.app.conversations import chat_inbox
 
-CONFIG_FIELDS={'title','avatar','settings','persona','behavior','group_mode','world_id','channel','public_persona','memory_preferences','initiative_enabled','user_profile','model_override','timezone_offset_minutes'}
+CONFIG_FIELDS={'title','avatar','settings','persona','behavior','goal_mode','group_mode','world_id','channel','public_persona','base_voice','reply_mode','initiative_enabled','user_profile','model_override','timezone_offset_minutes'}
 
 
 def backup_value(value):
@@ -43,9 +43,11 @@ def reset_story(user,world,backup_dir=None,backup=True):
     from backend.app.memory.retrieval import Embedding
     from backend.app.world.state_events import Event
     from backend.app.characters.image_generation import Job as ImageJob
+    from backend.app.characters.voice_generation import Job as VoiceJob
     models=[(storage.Conversation,storage.Conversation.id.in_(ids)),
         (Event,(Event.user_id==user)&(Event.world_id==world)),
         (ImageJob,(ImageJob.user_id==user)&(ImageJob.world_id==world)),
+        (VoiceJob,(VoiceJob.user_id==user)&(VoiceJob.world_id==world)),
         (Embedding,Embedding.user_id==user),
         (chat_history.Message,chat_history.Message.conversation_id.in_(ids)),
         (chat_history.ReadCursor,chat_history.ReadCursor.conversation_id.in_(ids)),

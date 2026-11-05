@@ -56,6 +56,27 @@ def seed_failed_image():
     return {'id':job['id']}
 
 
+
+@app.post('/__test__/voice')
+def seed_voice():
+    import io,wave,json
+    from unittest.mock import AsyncMock,patch
+    from backend.app.characters import speech_settings,voice_generation as voices
+    from backend.app.runtime import role_actions
+    from backend.app.conversations import chat_history
+    sample=io.BytesIO()
+    with wave.open(sample,'wb') as output:
+        output.setnchannels(1);output.setsampwidth(2);output.setframerate(24000);output.writeframes(bytes(4800))
+    speech_settings.save('owner',{'enabled':True,'model':'mimo-v2.5-tts','inherit_connection':False,'api_key':'fixture','base_url':'https://fixture.invalid/v1'})
+    with role_actions.window('owner','default','liu'):
+        storage.write_document('base_voice','fixture-voice')
+        storage.write_document('reply_mode','voice')
+        job=voices.enqueue('fixture-voice','liu',{0:{'name':'send_voice','arguments':json.dumps({'text':'（洗手）等我一下。','style':'自然，稍慢'})}},'发条语音')
+        message=voices.attach(job,'小柳：（洗手）等我一下。')
+        chat_history.append('fixture-voice',1,'assistant',message,'小柳')
+        with patch.object(speech_settings,'synthesize',new=AsyncMock(return_value=(sample.getvalue(),'audio/wav'))):voices.process(job['id'])
+    return {'id':job['id']}
+
 if __name__=='__main__':
     import uvicorn
     uvicorn.run(app,host='127.0.0.1',port=8799)

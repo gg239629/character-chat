@@ -109,7 +109,7 @@ def process(identity):
             if services.models().check_cfg(cfg):raise ValueError('请配置群聊模型以执行后台维护')
             if kind=='scene':
                 # An older failed job must never undo a newer applied world update.
-                if max(services.world().shared_world_data().get('scene_applied_at',0),services.world().shared_world_data().get('world_clock_revision',0))>=through:
+                if max(services.world().shared_world_data().get('scene_channel_applied',{}).get(channel,0),services.world().shared_world_data().get('world_clock_revision',0))>=through:
                     success=True;return
                 rows=chat_history.messages(100)
                 history=[m for m in rows if services.world().shared_world_data().get('scene_channel_applied',{}).get(channel,0)<m['created_at']<=through]
@@ -159,6 +159,9 @@ class Worker:
                     await asyncio.to_thread(memory_autosave.flush_due)
                     from backend.app.infrastructure import model_usage
                     await asyncio.to_thread(model_usage.flush)
+                    from backend.app.characters import voice_generation
+                    for voice_id in await asyncio.to_thread(voice_generation.due):
+                        voice_generation.start({'id':voice_id,'status':'pending'})
                     from backend.app.characters import image_generation
                     for image_id in await asyncio.to_thread(image_generation.due):
                         if len(self.active)>=4:break

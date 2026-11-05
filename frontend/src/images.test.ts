@@ -1,9 +1,9 @@
 import { describe,it,expect } from 'vitest';
-import { imageRequest,messageImage } from './images';
+import { messageImage,visibleMessageText } from './images';
 describe('chat images',()=>{
- it('recognizes explicit image requests without treating capability questions as paid requests',()=>{
-  for(const text of ['给我发张自拍','生成一张风景图','画一只猫','小柳，画一张照片','/image a flower'])expect(imageRequest(text),text).toBe(true);
-  for(const text of ['不要发自拍','你能生成图片吗','这张照片很好看','几点了'])expect(imageRequest(text),text).toBe(false);
+ it('hides legacy internal image markers and trailing prompts',()=>{
+  expect(visibleMessageText('等我一下。\n[[action:image]]\n内部画面描述')).toBe('等我一下。');
+  expect(visibleMessageText('普通聊天（拿起手机）')).toBe('普通聊天（拿起手机）');
  });
  it('renders only controlled assistant image identifiers',()=>{
   const id='a'.repeat(64);

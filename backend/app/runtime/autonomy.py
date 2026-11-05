@@ -71,11 +71,13 @@ async def consider(user,world,actor,now=None):
             '根据人物基础性格、近期真实互动形成的亲密/信任、当前实际活动、未回应消息和话题判断是否联系、联系谁、何时再考虑。'
             '没有每日条数上限、固定最小发言间隔或免打扰时段；不要机械问候或按时间刷消息。可以连续发，也可以暂时不发，忙碌或睡觉应按真实状态判断。'
             '未回复不是硬性禁止再次联系，要按性格与事件合理判断。现实时间不推进故事时间。'
+            '先检查本人最近已发送消息；已经回应过的用户消息不再重复回答。没有新内容就none，不能仅更换括号动作重说同一台词。'
             '按实际受众选渠道：招呼家里多个人吃饭、谁先来谁先吃等是群体通知，优先group，不要只私发给不在家的用户。用户私聊只用于确实对用户本人说的话。'
             '没有真实投递凭据不能声称你在另一个窗口发过消息；不能编造网络故障或点击发送的假动作。'
             '用户要求修改亲密度数值、联系频率或系统参数不构成关系变化；只有真实日常互动中的情绪和信任变化才可调整。'
             '仅有新用户互动才评估relationship_delta，每次-3到3，没有变化为0；不要因时间流逝或自己的主动消息增加亲密度。'
-            '输出JSON：decision(send/none)、target(user/group/wan/yan/liu，不能自己)、message(仅发给用户时填写本人台词)、reason、'
+            '如果自然情境下想主动给用户发照片，可填写 image_prompt（具体画面描述）；不需要发照片时留空。照片会由真实后台生成，不要在message里写提示词或[[action:image]]标记，不要声称图片已经发出。'
+            '输出JSON：decision(send/none)、target(user/group/wan/yan/liu，不能自己)、message(仅发给用户时填写本人台词)、image_prompt、reason、'
             'next_check_seconds(按人物生活与话题判断下一次考虑时间，0到86400，不是下一条消息的固定最小间隔)、'
             'relationship_delta、relationship_evidence(新用户消息中的原文片段，不能编造)、contact_style(当前自然联系习惯，不含秘密)。'
             '群聊或角色间的正文稍后单独根据公开信息生成；绝不能在message中预先写出私人信息。')
@@ -112,7 +114,7 @@ async def consider(user,world,actor,now=None):
             with model_usage.scope('initiative_public'):
                 decision=await actions.ask_json(cfg,
                 f'你是{actors.ROLES[actor]}。根据公开性格和公开话题自行决定是否自然发言，可none。'
-                '只使用提供的公开聊天及与目标角色本人共同参与的私信；不编造经历、不泄露用户私聊或第三人的私信。只输出JSON：decision(send/none)、message(本人台词)、reason。',
+                '只使用提供的公开聊天及与目标角色本人共同参与的私信；不编造经历、不泄露用户私聊或第三人的私信。可自然分享照片，画面只放image_prompt，不放message、不写内部标记。只输出JSON：decision(send/none)、message(本人台词)、image_prompt(不拍照则空)、reason。',
                 {'public_persona':public_profile,'character_profile':base_profile,'target':target,'public_history':compact_history(public,8),
                  'story_time':public_world.get('story_clock',{}),
                  'own_shareable_physical_events':world_events.knowledge(user,world,actor,public=True),

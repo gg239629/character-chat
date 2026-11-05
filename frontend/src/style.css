@@ -10,3 +10,12 @@
 button.icon-button,a.icon-button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;min-width:44px;min-height:44px;padding:10px;border-radius:6px;line-height:1}.icon-button svg{display:block;flex:none}.icon-button:not(.primary):not(:disabled):hover{background:#353535}.icon-button:not(:disabled):active{background:#424242}.icon-button.primary{color:#fff}.back{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px}.composer form>.icon-button{flex:0 0 44px}.composer-status .icon-button{width:44px;height:44px;min-height:44px;padding:10px}.rail .icon-button{font-size:inherit}.download-image.icon-button{padding:10px}.icon-spinning{animation:icon-spin 1s linear infinite}@keyframes icon-spin{to{transform:rotate(360deg)}}@media(max-width:600px){.composer form{justify-content:flex-end}.composer form>.icon-button{flex:0 0 44px}}@media(prefers-reduced-motion:reduce){.icon-spinning{animation:none}}
 
 .image-settings .actions{position:sticky;bottom:0;margin-top:10px;padding:8px 0 0;background:var(--panel)}.icon-button.primary:not(:disabled):active{background:#06ad56}
+
+.message-body:has(.message-image)>p{display:none}
+
+.dialog-body:has(.speech-settings){overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+.speech-settings select{display:block;width:100%;min-height:44px;margin-top:7px;border:1px solid var(--line);background:var(--panel);color:inherit;border-radius:5px;padding:8px 12px}
+
+.voice-message{padding:12px 14px;border:1px solid var(--line);background:var(--panel);border-radius:7px;max-width:100%;min-width:220px}.voice-message audio{display:block;width:100%;max-width:320px;height:44px}.voice-message small{margin-top:8px}.voice-message details{margin-top:10px}.voice-message summary{cursor:pointer;color:var(--muted);font-size:13px;padding:6px 0;min-height:32px}.voice-transcript{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;padding-top:8px}
+
+.reply-mode-select{display:block;width:100%;min-height:44px;margin-top:7px;padding:8px 12px;background:var(--panel);color:inherit;border:1px solid var(--line);border-radius:5px}

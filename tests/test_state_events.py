@@ -205,3 +205,44 @@ class StateEventTests(unittest.TestCase):
         self.assertEqual(len(self.rows()),1)
         self.assertIn('不能当作本人目击',events.history('owner','world','liu','礼物')[0]['basis'])
         self.assertNotIn('role_states',self.store.read('owner','world'))
+
+    def test_state_tool_refines_activity_at_confirmed_destination_and_syncs_self(self):
+        from backend.app.world import state_tools
+        record=self.record('小柳：（走到窗边，把烟按进烟灰缸）',stamp=200)
+        events.capture('owner','world','group',record)
+        result={'events':[{'source_id':'one','actor':'liu','evidence':'走到窗边，把烟按进烟灰缸','status':'窗边·熄烟'}]}
+        message=S(content=None,tool_calls=[S(function=S(name='update_character_state',arguments=json.dumps(result)))])
+        events.apply_model('owner','world','group',[record],state_tools.decode(message))
+        data=self.store.read('owner','world')
+        self.assertEqual(data['role_states']['liu']['status'],'窗边·熄烟')
+        facts,_,_=actor_context.build('owner','world','liu','现在做什么')
+        self.assertEqual(facts['self']['last_confirmed_status'],'窗边·熄烟')
+        self.assertTrue(any('烟灰缸' in r['action'] for r in facts['self']['recent_actions']))
+        result['events'][0]['status']='阳台·抽烟'
+        events.apply_model('owner','world','group',[record],result)
+        self.assertEqual(self.store.read('owner','world')['role_states']['liu']['status'],'窗边·熄烟')
+
+    def test_unknown_state_tool_does_not_apply(self):
+        from backend.app.world import state_tools
+        with self.assertRaises(ValueError):state_tools.decode(S(content=None,tool_calls=[S(function=S(name='other_tool',arguments='{}'))]))
+
+    def test_direct_location_with_actual_action_updates_state(self):
+        events.capture('owner','world','group',self.record('小柳：（走到窗边）',100,'old-window'))
+        record=self.record('小柳：厨房。水还没凉，碗刚洗到一半。（手在水里冲了冲，抬眼往门口瞥了一下）找我？说。',200,'washing')
+        events.apply_model('owner','world','liu',[record],{'events':[{'source_id':'washing','actor':'liu',
+            'evidence':'手在水里冲了冲，抬眼往门口瞥了一下','status':'厨房·洗碗',
+            'position':{'place':'厨房','relative_to':None,'relation':None}}]})
+        self.assertEqual(self.store.read('owner','world')['role_states']['liu']['status'],'厨房·洗碗')
+
+    def test_plain_location_claim_still_needs_actual_action(self):
+        record=self.record('小柳：厨房。',200,'claim')
+        self.assertFalse(events.location_supported(record,'厨房','别处'))
+        quoted=self.record('小柳：她说在厨房。（手在水里冲了冲）',200,'quoted')
+        self.assertFalse(events.location_supported(quoted,'厨房','手在水里冲了冲'))
+
+    def test_full_message_model_evidence_is_narrowed_to_real_action(self):
+        record=self.record('小柳：厨房。水还没凉，碗刚洗到一半。（手在水里冲了冲，抬眼往门口瞥了一下）找我？说。',200,'washing-full')
+        events.apply_model('owner','world','liu',[record],{'events':[{'source_id':'washing-full','actor':'liu',
+            'evidence':'厨房。水还没凉，碗刚洗到一半。（手在水里冲了冲，抬眼往门口瞥了一下）',
+            'status':'厨房·洗碗','position':{'place':'厨房','relative_to':None,'relation':None}}]})
+        self.assertEqual(self.store.read('owner','world')['role_states']['liu']['status'],'厨房·洗碗')

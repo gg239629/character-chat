@@ -70,9 +70,11 @@ class SettingsIn(BaseModel):
     max_tokens: int | None = None
     persona: str | None = Field(default=None, max_length=4000)
     group_mode: str | None = Field(default=None, pattern=r'^(natural|all)$')
+    goal_mode:bool | None=None
     relationship: str | None = Field(default=None, max_length=2000)
     public_persona: str | None = Field(default=None,max_length=1000)
-    memory_preferences: dict[str,float] | None = None
+    base_voice: str | None = Field(default=None,max_length=200)
+    reply_mode:str | None=Field(default=None,pattern=r'^(text|voice)$')
     behavior: role_actions.Behavior | None = None
     adult_mode: bool | None = None
 
@@ -129,6 +131,8 @@ def get_settings():
     """配置文件里的值 + 实际生效的值。api_key 只给掩码。"""
     file_cfg = services.models().load_config()
     eff = services.models().load_config()
+    from backend.app.characters import speech_settings
+    speech=speech_settings.public(storage.scope.get()[0])
     return {
         "model": file_cfg.get("model", ""),
         "base_url": file_cfg.get("base_url", ""),
@@ -143,7 +147,11 @@ def get_settings():
         "persona": storage.read_document('persona', ''),
         "relationship": storage.read_document('relationship', ''),
         "public_persona": storage.read_document('public_persona',''),
-        "memory_preferences": storage.read_document('memory_preferences',{'group_public':.7,'private_public':.3}),
+        "base_voice": storage.read_document('base_voice','') if chat_world.get() and chat_world.get()['channel'] in actors.ROLES else '',
+        "reply_mode": storage.read_document('reply_mode','text') if chat_world.get() and chat_world.get()['channel'] in actors.ROLES else 'text',
+        "speech_enabled":bool(speech['enabled']),
+        "speech_configured":bool(speech.get('model')),
+        "goal_mode":bool(services.world().shared_world_data().get('goal_mode',False)) if chat_world.get() and chat_world.get()['channel']=='group' else False,
         "group_mode": storage.read_document('group_mode', 'natural'),
         "adult_mode": bool(services.api().read_story_flag('adult_mode', False)),
         "purpose": "scene" if not chat_world.get() or chat_world.get()['channel'] == 'group' else "character",
@@ -153,11 +161,14 @@ def get_settings():
 @router.post("/api/settings")
 def set_settings(body: SettingsIn):
     """写回 config/model.json。api_key 留空表示不改。"""
+    if body.goal_mode is not None and (not chat_world.get() or chat_world.get()['channel']!='group'):
+        raise HTTPException(422,'目标模式仅适用于群聊')
+    if body.reply_mode is not None and (not chat_world.get() or chat_world.get()['channel'] not in actors.ROLES):
+        raise HTTPException(422,'回复方式仅在对应角色私聊设置')
+    if body.base_voice is not None and (not chat_world.get() or chat_world.get()['channel'] not in actors.ROLES):
+        raise HTTPException(422,'请在对应角色的人物设置中填写基础音色')
     if body.behavior is not None:
         raise HTTPException(422,'角色主动行为由性格与日常互动决定，不支持手动配置')
-    if body.memory_preferences is not None:
-        if set(body.memory_preferences)-{'group_public','private_public'} or any(not .15<=v<=.85 for v in body.memory_preferences.values()):
-            raise HTTPException(422,'记忆预算比例需在0.15至0.85之间')
     cfg = dict(services.models().load_config())
 
     if body.model is not None:
@@ -182,16 +193,20 @@ def set_settings(body: SettingsIn):
     elif body.inherit_model is False or any(getattr(body,k) is not None for k in model_fields):
         storage.write_document('settings',encrypted)
         storage.write_document('model_override',True)
+    if body.reply_mode is not None:
+        storage.write_document('reply_mode',body.reply_mode)
+    if body.base_voice is not None:
+        storage.write_document('base_voice',body.base_voice.strip())
     if body.persona is not None:
         storage.write_document('persona', body.persona.strip())
     if body.relationship is not None:
         storage.write_document('relationship', body.relationship.strip())
     if body.public_persona is not None:
         storage.write_document('public_persona',body.public_persona.strip())
-    if body.memory_preferences is not None:
-        storage.write_document('memory_preferences',body.memory_preferences)
     if body.behavior is not None:
         storage.write_document('behavior',body.behavior.model_dump())
+    if body.goal_mode is not None:
+        storage.write_document('goal_mode',body.goal_mode)
     if body.group_mode is not None:
         storage.write_document('group_mode', body.group_mode)
     if body.adult_mode is not None:
@@ -231,3 +246,40 @@ async def test_model(body: SettingsIn | None = None):
         return JSONResponse({"error": services.models().friendly_error(last_exc)}, 502)
     finally:
         await client.close()
+
+
+class SpeechSettingsIn(BaseModel):
+    enabled:bool=False
+    provider:str=Field(default='auto',pattern=r'^(auto|mimo|openai)$')
+    model:str=Field(default='',max_length=200)
+    base_url:str=Field(default='',max_length=2000)
+    api_key:str=Field(default='',max_length=4000)
+    inherit_connection:bool=True
+
+
+@router.get('/api/speech-settings')
+def get_speech_settings():
+    from backend.app.characters import speech_settings
+    return speech_settings.public(storage.scope.get()[0])
+
+
+@router.put('/api/speech-settings')
+def save_speech_settings(body:SpeechSettingsIn):
+    from backend.app.characters import speech_settings
+    try:return speech_settings.save(storage.scope.get()[0],{k:v.strip() if isinstance(v,str) else v for k,v in body.model_dump().items()})
+    except ValueError as error:raise HTTPException(422,str(error))
+
+
+class SpeechTestIn(SpeechSettingsIn):
+    actor:str=Field(default='wan',pattern=r'^(wan|yan|liu)$')
+
+
+@router.post('/api/speech-settings/test')
+async def test_speech_settings(body:SpeechTestIn):
+    from backend.app.characters import speech_settings
+    try:
+        return await speech_settings.test(storage.scope.get()[0],
+            {k:v.strip() if isinstance(v,str) else v for k,v in body.model_dump(exclude={'actor'}).items()},
+            chat_world.get()['id'],body.actor)
+    except ValueError as error:raise HTTPException(422,str(error))
+    except Exception as error:raise HTTPException(502,'语音连接检查失败：'+services.models().friendly_error(error))

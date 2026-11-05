@@ -87,7 +87,7 @@ def info(row):
     return {k:getattr(row,k) for k in ('id','status','actor','prompt','size','model','error','message_id','created_at')}
 
 
-def enqueue(user,world,channel,actor,prompt,size,request_id):
+def enqueue(user,world,channel,actor,prompt,size,request_id,record_user=True):
     from backend.app.conversations import message_service
     from backend.app.runtime import role_actions
     if channel not in ('group',*actors.ROLES):raise ValueError('无效聊天窗口')
@@ -118,7 +118,7 @@ def enqueue(user,world,channel,actor,prompt,size,request_id):
                     row=Job(id=identity,user_id=user,world_id=world,channel=channel,actor=actor,
                         prompt=prompt.strip(),size=size,model=cfg['model'],status='pending',created_at=time.time(),lease_until=0,error='',mime='',message_id='')
                     db.add(row)
-                    message_service.write(db,user,cid,'image-'+identity,0,'user','[生图请求] '+prompt.strip())
+                    if record_user:message_service.write(db,user,cid,'image-'+identity,0,'user','[生图请求] '+prompt.strip())
                     db.commit();result=info(row)
                 break
             except (IntegrityError,RuntimeError):
@@ -256,7 +256,7 @@ def process(identity):
                         if not row or row.status!='running':return
                         speaker=actors.ROLES.get(actor,'图片')
                         message,_=message_service.write(db,user,cid,'image-'+identity,1,'assistant',
-                            speaker+'：'+prompt+'\n[[image:'+identity+']]',speaker)
+                            speaker+'：\n[[image:'+identity+']]',speaker)
                         row.image=image;row.mime=mime;row.status='done';row.message_id=message.id;row.lease_until=0
                         db.commit()
                     break

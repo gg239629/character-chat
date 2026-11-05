@@ -14,7 +14,7 @@ def upgrade(engine):
     from backend.app.memory import retrieval
     from backend.app.mcp import access
     from backend.app.world import state_events
-    from backend.app.characters import image_generation
+    from backend.app.characters import image_generation,voice_generation
     root=Path(__file__).resolve().parents[3]
     cfg=Config(str(root/'alembic.ini'));cfg.set_main_option('script_location',str(root/'migrations'))
     with engine.begin() as connection:

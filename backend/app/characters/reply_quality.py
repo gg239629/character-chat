@@ -52,3 +52,17 @@ def trim_repeated(text,history):
     if not removed:return text
     result='\n'.join(p.strip() for p in kept if p.strip()).strip()
     return name+'：'+result if result else ''
+
+
+def repeated_initiative(text,speaker,history):
+    """Block re-answering the same user turn, including cosmetic action changes."""
+    start=next((i+1 for i in range(len(history)-1,-1,-1) if history[i].get('role')=='user'),0)
+    def speech(value):
+        return re.sub(r'[（(][^（）()]*[）)]','',value)
+    for message in history[start:]:
+        if message.get('role')!='assistant' or message.get('speaker')!=speaker:continue
+        earlier=message['content']
+        if normalized(text)==normalized(earlier):return True
+        current,old=speech(text),speech(earlier)
+        if len(normalized(current))>=16 and len(normalized(old))>=16 and redundant(current,[old]):return True
+    return False

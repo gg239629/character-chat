@@ -170,3 +170,11 @@ class MaintenanceTests(unittest.TestCase):
             work.process(scene.id)
             update_scene.assert_not_called()
         self.assertEqual(next(job for job in self.jobs() if job.id==scene.id).status,'pending')
+
+    def test_global_scene_progress_does_not_skip_unprocessed_private_window(self):
+        scene=self.seed('liu')
+        self.store.mutate('owner','default',lambda data:data.update(scene_applied_at=scene.through+100,scene_channel_applied={'group':scene.through+100}))
+        with patch.object(server,'update_scene_state',return_value={}) as update_scene:
+            work.process(scene.id)
+            update_scene.assert_called_once()
+        self.assertEqual(self.store.read('owner','default')['scene_channel_applied']['liu'],scene.through)

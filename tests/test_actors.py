@@ -305,7 +305,7 @@ class ActorTests(unittest.TestCase):
             with actors.role_scope('owner','default',role):
                 storage.append_log([{'who':'他','text':'only-secret-'+role}])
         _,payload=self._payload('wan',[{'role':'user','content':'你怎么不说话了'}])
-        timeline=next(m['content'] for m in payload if '以下按时间排序' in m['content'])
+        timeline='\n'.join(m['content'] for m in payload if m['role']!='system')
         self.assertLess(timeline.index('去群里发个1'),timeline.index('小婉：1'))
         self.assertLess(timeline.index('小婉：1'),timeline.index('发1干嘛'))
         self.assertNotIn('only-secret-yan',json.dumps(payload,ensure_ascii=False))
@@ -425,14 +425,11 @@ class ActorTests(unittest.TestCase):
             client.post('/api/stream',json={'request_id':'nominated-order','messages':[{'role':'user','content':'周末安排呢？'}]})
             self.assertEqual(planner.call_count,3)
 
-    def test_independent_memory_preferences_and_public_traits_settings(self):
+    def test_memory_ratios_removed_from_settings_and_public_traits_still_save(self):
         with TestClient(server.app) as client:
             headers={'X-Chat-Channel':'yan'}
-            response=client.post('/api/settings',headers=headers,json={'public_persona':'公开话少','memory_preferences':{'group_public':.6,'private_public':.2}})
+            response=client.post('/api/settings',headers=headers,json={'public_persona':'公开话少'})
             self.assertEqual(response.status_code,200)
             self.assertEqual(response.json()['public_persona'],'公开话少')
-            self.assertEqual(response.json()['memory_preferences']['private_public'],.2)
-            self.assertNotEqual(client.get('/api/settings',headers={'X-Chat-Channel':'wan'}).json()['memory_preferences']['private_public'],.2)
-            for prefs in [{'group_public':.99},{'unknown':.5}]:
-                self.assertEqual(client.post('/api/settings',headers=headers,json={'memory_preferences':prefs}).status_code,422)
-            self.assertEqual(client.get('/api/settings',headers=headers).json()['memory_preferences']['group_public'],.6)
+            self.assertNotIn('memory_preferences',response.json())
+            self.assertNotIn('memory_preferences',client.get('/api/settings',headers=headers).json())

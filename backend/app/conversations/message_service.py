@@ -112,6 +112,20 @@ def deliver(user,world,sender,target,content,identity,event_id=''):
         claimed=chat_history.claim(turn)
         try:
             chat_history.bootstrap()
+            # Check under the window generation lease, so concurrent initiative
+            # tasks cannot both pass before either message becomes visible.
+            if claimed and event_id:
+                with Session(storage.get_store().engine) as db:
+                    action=db.get(role_actions.Action,event_id)
+                    if action and action.kind=='autonomous':
+                        from backend.app.characters.reply_quality import repeated_initiative
+                        message_id=chat_history.identity(storage.scope.get()[1],turn,0)
+                        if not db.get(chat_history.Message,message_id) and repeated_initiative(
+                                content,actors.ROLES[sender],chat_history.messages(50)):
+                            action.status='cancelled';action.lease_until=0
+                            action.detail={**action.detail,'suppressed_reason':'repeated_initiative'}
+                            db.commit()
+                            return {'id':'','inserted':False,'status':'cancelled','channel':channel}
             inserted=durable_append(turn,0,'assistant',content,actors.ROLES[sender],metadata={
                 'source':'role_action','action_id':event_id,'audience':['user',*actors.ROLES] if target=='group' else ['user',sender]},commit_hook=receipt)
             return {'id':chat_history.identity(storage.scope.get()[1],turn,0),'inserted':inserted,

@@ -72,7 +72,10 @@ def _project(data, event):
     cutoff=max(data.get('role_states',{}).get(actor,{}).get('evidence_at',0),data.get('world_clock_revision',0))
     if stamp<cutoff:return
     old=data.get('role_states',{}).get(actor,{})
-    if old.get('source_id')==event['source_id'] and old.get('source')=='explicit_transition' and d.get('method')=='model':return
+    if old.get('source_id')==event['source_id'] and old.get('source')=='explicit_transition' and d.get('method')=='model':
+        # Refine activity at the confirmed destination, never undo the move.
+        destination=old.get('status','').split('·')[0]
+        if (status and status.split('·')[0]!=destination) or (position and position.get('place') not in (None,destination)):return
     if position:
         positions=data.setdefault('role_positions', {})
         if stamp >= positions.get(actor, {}).get('updated_at', 0):
@@ -123,6 +126,8 @@ def commit(user, world, items, change=None):
                 db.commit()
                 cached=storage.request_snapshot.get()
                 if cached and cached['scope']==(user,world):cached['data']=data
+                from backend.app.infrastructure import events
+                events.publish(user)
                 return
         except IntegrityError:
             if attempt==9:raise
@@ -211,7 +216,7 @@ def candidates(messages,channel):
 
 
 EXTRACTION_SYSTEM='''你是世界状态证据提取器。只提取本批原文中已经实际发生的动作/位置/状态变化。
-角色助手的台词只是说法，只有括号内本人实际动作可更新物理状态。用户明确事实叙述可以作为证据。
+角色助手的台词只是说法，只有括号内本人实际动作可更新物理状态。若消息开头直接回答当前位置（如“厨房。”）且同条消息有实际动作佐证，地点可用该回答，evidence仍逐字引用括号动作。用户明确事实叙述可以作为证据。
 计划、请求、假设、提问、引用、否定、谎言、未来和回忆不作为当前完成动作。用户不能替未提及的人移动。
 不要推测动作时长、完成结果或别人位置，不生成通信成功记录，不修改时间。没有依据返回空events。
 每个输出项必须引用输入source_id并逐字引用evidence；不输出知情人，权限由服务端决定。
@@ -219,6 +224,18 @@ EXTRACTION_SYSTEM='''你是世界状态证据提取器。只提取本批原文�
 "evidence":"原文连续片段","status":"厨房·洗杯子",
 "position":{"place":"厨房或null","relative_to":"user/wan/yan/liu或null","relation":"旁边或null"}}]}。
 没有位置变化时省略position，没有状态变化时省略status。'''
+
+
+def location_supported(record,place,evidence):
+    if place in evidence:return True
+    if record.get('role')!='assistant' or not action_texts(record):return False
+    text=re.sub(r'^\s*小[婉研柳][：:]\s*','',record.get('content',''))
+    # A direct current-location answer is corroborated by actual action in the
+    # same message. Quoted reports, plans and plain unsupported speech stay out.
+    from backend.app.world.continuity import is_plan
+    introduction=re.split(r'[。！!，,\n]',text,maxsplit=1)[0]
+    if is_plan(introduction) or re.search(r'撒谎|谎称|假装|骗|[“”「」"?？]',introduction):return False
+    return bool(re.match(r'(?:我)?(?:现在|已经)?(?:在|到了|回到)?'+re.escape(place)+r'[。！!，,\s]',text))
 
 
 def apply_model(user,world,channel,records,answer):
@@ -232,6 +249,13 @@ def apply_model(user,world,channel,records,answer):
         record=by_id.get(e.get('source_id'));actor=e.get('actor');evidence=e.get('evidence')
         if not record or actor not in ('user',*actors.ROLES) or not isinstance(evidence,str) or not evidence.strip():continue
         source_actor=_speaker(record);text=record.get('content','')
+        if record.get('role')=='assistant' and source_actor==actor and evidence in text:
+            actions=action_texts(record)
+            if not any(evidence in action for action in actions):
+                # Some models quote the location answer and narration together.
+                # Retain only an actual verbatim action for state evidence.
+                contained=[action for action in actions if action in evidence]
+                if contained:evidence=contained[-1]
         if evidence not in text or continuity.is_plan(evidence) or re.search(r'撒谎|谎称|没动|并没|[?？“”「」"]',evidence):continue
         if channel in actors.ROLES and actor not in (channel,'user'):continue
         if record.get('role')=='assistant':
@@ -248,7 +272,7 @@ def apply_model(user,world,channel,records,answer):
         pos=e.get('position')
         if isinstance(pos,dict):
             place=pos.get('place');target=pos.get('relative_to');relation=pos.get('relation')
-            if place is not None and (not isinstance(place,str) or not 1<=len(place)<=20 or place not in evidence):continue
+            if place is not None and (not isinstance(place,str) or not 1<=len(place)<=20 or not location_supported(record,place,evidence)):continue
             if target is not None and target not in ('user',*actors.ROLES):continue
             if target==actor or (target is not None and (not isinstance(relation,str) or relation not in evidence)):continue
             if target is not None:
@@ -262,9 +286,9 @@ def apply_model(user,world,channel,records,answer):
             place=detail['status'].split('·')[0]
             data=storage.get_store().read(user,world)
             old=data.get('role_states',{}).get(actor,{}).get('status',data.get('scene_state',{}).get(actors.ROLES.get(actor,''),''))
-            if place not in evidence and place!=old.split('·')[0]:continue
+            if not location_supported(record,place,evidence) and place!=old.split('·')[0]:continue
             if detail.get('position',{}).get('place') and detail['position']['place']!=place:continue
-            if place in evidence and not detail.get('position'):
+            if location_supported(record,place,evidence) and not detail.get('position'):
                 detail['position']={'place':place,'relative_to':None,'relation':None}
         key=hashlib.sha256(evidence.encode()).hexdigest()
         items.append(make(user,world,record,channel,actor,'state',detail,'model-'+key))

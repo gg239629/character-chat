@@ -73,3 +73,20 @@ def dismiss_image(identity:str):
         return {'ok':True}
     except PermissionError:raise HTTPException(404,'图片任务不存在')
     except ValueError as error:raise HTTPException(409,str(error))
+
+
+@router.get('/api/voices/{identity}')
+def voice_status(identity:str):
+    from backend.app.characters import voice_generation
+    world=chat_world.get()
+    try:return voice_generation.get(storage.scope.get()[0],world['id'],world['channel'],identity)
+    except PermissionError:raise HTTPException(404,'语音不存在')
+
+
+@router.get('/api/voices/{identity}/content')
+def voice_content(identity:str):
+    from backend.app.characters import voice_generation
+    try:
+        data,mime=voice_generation.content(storage.scope.get()[0],identity)
+        return Response(data,media_type=mime,headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+    except PermissionError:raise HTTPException(404,'语音不可用')
