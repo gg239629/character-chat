@@ -1,5 +1,7 @@
 # Character Chat · 多角色 AI 会话平台
 
+**简体中文** · [English](README.en.md)
+
 Character Chat 是一个支持多角色协作、长期记忆和持续世界状态的全栈 AI 会话平台。系统在群聊中动态决定下一位发言角色，为每个角色构建权限范围内的上下文，并通过持久化任务处理消息、回复和后台状态更新。Web 与 MCP 客户端共用角色服务。
 
 **[在线体验](https://private-character-chat.onrender.com)** · [本地启动](#本地启动) · [部署与文档](#部署与文档)
