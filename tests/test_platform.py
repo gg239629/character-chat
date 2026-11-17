@@ -90,13 +90,17 @@ class PlatformTests(unittest.TestCase):
             self.assertNotIn('private test content',str(states))
 
     def test_llamaindex_semantic_recall_caches_embeddings_without_text_copy(self):
+        from backend.app.memory import long_memory
         records=[{'text':'周末去植物园看兰花'},{'text':'厨房里有一袋面粉'}]
         client=MagicMock();client.__enter__.return_value=client
         def embed(**kwargs):return SimpleNamespace(data=[SimpleNamespace(embedding=[0.,1.] if '面粉' in value else [1.,0.]) for value in kwargs['input']],usage=SimpleNamespace(prompt_tokens=10,total_tokens=10))
         client.embeddings.create.side_effect=embed
         cfg={'embedding_model':'fake-embedding','api_key':'fake','base_url':'https://embedding.invalid/v1'}
+        query = '说好的赏花目的地'
+        lexical = long_memory.rank(query, records, semantic=False)
+        self.assertNotIn(0, [index for _, _, index in lexical[:3]])
         with patch('openai.OpenAI',return_value=client):
-            ranked=retrieval.hybrid_rank('说好的赏花目的地',records,[],cfg)
+            ranked=retrieval.hybrid_rank(query,records,lexical,cfg)
             self.assertEqual(ranked[0][2],0)
             count=client.embeddings.create.call_count
             retrieval.hybrid_rank('说好的赏花目的地',records,[],cfg)

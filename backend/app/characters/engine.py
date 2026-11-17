@@ -374,11 +374,14 @@ def actor_payload(role, messages, group):
                 exclude_ids=[m['id'] for m in current_context if m.get('id')],
                 exclude_texts=[m.get('content','') for m in current_context],
                 recall_budget=1200 if recall else 0,
+                semantic=recall,
             )
             if memory['recall']:
-                payload.append({'role':'system','content':role_memory.render_recall(memory['recall'])})
+                payload.append({'role':'system','content':role_memory.render_recall(memory['recall'], group=group)})
+            elif recall and not history and not communication and not receipt_fact:
+                payload.append({'role':'system','content':'当前轮缺少匹配的历史证据。结合近期对话和已确认事实回答；仍不确定时说明不确定或请用户补充线索。'})
             if memory['events']:
-                payload.append({'role':'system','content':role_memory.render(memory)})
+                payload.append({'role':'system','content':role_memory.render(memory, group=group)})
         if history:
             payload.append({'role':'system','content':'本轮相关历史证据（历史动作不等于当前仍在进行；听说不等于亲历）：'+json.dumps(history,ensure_ascii=False,separators=(',',':'))})
         if communication:

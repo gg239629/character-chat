@@ -49,6 +49,27 @@ class EfficiencyTests(unittest.TestCase):
         self.assertIn('兰花展',query);self.assertIn('周末去哪里',query)
         self.assertGreater(role_memory.adaptive_budget(query),role_memory.adaptive_budget('早上好'))
 
+    def test_ordinary_chat_uses_lexical_recall_and_marks_private_evidence(self):
+        from backend.app.memory import retrieval
+        with actors.role_scope('owner', 'default', 'wan'):
+            storage.write_document('important_facts', [{
+                'id': 'own', 'text': '植物园周年展览', 'key': '植物园展览',
+            }])
+        with patch.object(retrieval, 'rank', side_effect=AssertionError('unexpected semantic recall')):
+            memory = role_memory.remember('owner', 'default', 'wan', '植物园展览', True, semantic=False)
+        text = role_memory.render(memory, group=True)
+        self.assertIn('植物园周年展览', text)
+        self.assertIn('未经授权不得在群聊公开', text)
+
+    def test_correction_can_match_the_original_topic_by_fact_key(self):
+        storage.write_document('important_facts', [
+            {'id': 'original', 'key': '植物园周末计划', 'text': '周六出发', 'status': 'superseded'},
+            {'id': 'updated', 'key': '植物园周末计划', 'text': '已经取消', 'status': 'cancelled'},
+        ])
+        memory = role_memory.remember('owner', 'default', 'wan', '植物园周末计划', True,
+                                      recall_budget=1200, semantic=False)
+        self.assertEqual([event['id'] for event in memory['recall']], ['updated'])
+
     def test_actor_prompt_deduplicates_current_transcript_and_strips_internal_ids(self):
         chat_history.bootstrap();chat_history.append('original',0,'user','非常独特的当前窗口消息')
         message=chat_history.messages()[-1]

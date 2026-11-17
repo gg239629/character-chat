@@ -180,7 +180,7 @@ def history(user,world,actor,peer,limit=100):
         return [record(row) for row in reversed(rows)]
 
 
-def recall(user,world,actor,query,budget=1800):
+def recall(user,world,actor,query,budget=1800,*,semantic=True):
     """Filter by both participant and owner before ranking, including archives."""
     authorize(user,world,actor)
     from backend.app.memory import long_memory
@@ -199,13 +199,13 @@ def recall(user,world,actor,query,budget=1800):
             entries=[entry for i,entry in enumerate(entries) if i<100 or entry['id'] not in archived]
             entries += [{'id':r.id,'channel':'peer:'+pair,'speaker':'角色私聊摘要','time':r.through,
                 'text':r.content,'kind':'peer_archive','visibility':'participants','audience':pair.split('-')} for r in archives]
-            ranks=long_memory.rank(query,entries)
+            ranks=long_memory.rank(query,entries,semantic=semantic)
             chosen=list(range(min(2,len(rows))))
             chosen += [i for coverage,_,i in ranks if coverage>=.2 and i not in chosen][:5]
             events.extend(entries[i] for i in chosen)
     selected=[];used=0
     # Relevant matches compete with recency; never allocate the full budget twice.
-    ranking={index:coverage for coverage,_,index in long_memory.rank(query,events)}
+    ranking={index:coverage for coverage,_,index in long_memory.rank(query,events,semantic=semantic)}
     for index in sorted(range(len(events)),key=lambda i:(ranking.get(i,0),events[i]['time']),reverse=True):
         event=events[index]
         size=len(json.dumps(event,ensure_ascii=False,separators=(',',':')))
