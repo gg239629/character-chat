@@ -16,7 +16,7 @@ def terms(text):
     text = re.sub(r"[\W_]+", "", text.lower())
     return {text[i:i+2] for i in range(len(text)-1)}
 
-def rank(query, records):
+def rank(query, records, *, semantic=True):
     query_terms = terms(query)
     if not query_terms or not records:
         return []
@@ -29,6 +29,8 @@ def rank(query, records):
             coverage = len(overlap)/len(query_terms)
             scored.append((coverage, float(scores[index]), index))
     lexical=sorted(scored,key=lambda row:(row[1],row[0],row[2]),reverse=True)
+    if not semantic:
+        return lexical
     from backend.app.memory import retrieval
     return retrieval.rank(query,records,lexical)
 
@@ -161,6 +163,7 @@ def refresh_summary(cfg):
                 data.setdefault('important_facts',[]).append({'id':fact_id,'text':fact_text,'key':key,
                     'status':status if evidenced else 'active','source_ids':ids,'created_at':stamp,
                     'source_start':batch[0].get('saved_at','未知'),'source_end':batch[-1].get('saved_at','未知'),
+                    **({'evidence': evidence.strip()[:240]} if evidenced else {}),
                     **metadata,'participants':sorted({r.get('who','') for r in batch})})
                 known.add(fact_text)
             # Private originals for recovery only, excluded from retrieval.

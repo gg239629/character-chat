@@ -58,6 +58,55 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual(text.count('非常独特的当前窗口消息'),1)
         self.assertTrue(all(set(item)=={'role','content'} for item in payload))
 
+    def test_actor_prefix_stays_fixed_across_topics_and_greetings_skip_extra_recall(self):
+        root = Path(self.tmp.name)
+        profile = root / 'wan.md'
+        profile.write_text('身份：测试角色。\n\n性格：开朗。\n\n兰花在植物园。\n\n周末喜欢弹钢琴。', encoding='utf-8')
+        with (
+            patch.object(server, 'MEMORY_MD', root / 'shared.md'),
+            patch.object(role_memory, 'remember', wraps=role_memory.remember) as remember,
+        ):
+            _, greeting = server.actor_payload('wan', [{'role': 'user', 'content': '早上好！'}], True)
+            remember.assert_not_called()
+            _, plants = server.actor_payload('wan', [{'role': 'user', 'content': '植物园的兰花'}], True)
+            _, music = server.actor_payload('wan', [{'role': 'user', 'content': '喜欢弹钢琴吗'}], True)
+        self.assertEqual(greeting[:2], plants[:2])
+        self.assertEqual(plants[:2], music[:2])
+        self.assertIn('身份：测试角色', plants[0]['content'])
+        self.assertNotIn('植物园', plants[0]['content'])
+        self.assertTrue(any('兰花在植物园' in m['content'] for m in plants[2:]))
+        self.assertTrue(any('周末喜欢弹钢琴' in m['content'] for m in music[2:]))
+
+    def test_actor_recall_survives_long_chat_and_respects_corrections_and_permissions(self):
+        self.store.mutate('owner', 'default', lambda data: data.update(memory_policy=2, important_facts=[
+            {'id': 'old', 'key': '植物园约定', 'text': '植物园约定周六出发', 'status': 'superseded', 'created_at': 1},
+            {'id': 'new', 'key': '植物园约定', 'text': '取消植物园约定', 'status': 'cancelled',
+             'evidence': '植物园约定取消，周末不去了。', 'created_at': 2, 'source_end': '2026-11-01T09:30:00+08:00'},
+        ]))
+        with actors.role_scope('owner', 'default', 'yan'):
+            storage.write_document('important_facts', [
+                {'id': 'private', 'text': '植物园约定密语紫色手套', 'status': 'active'},
+            ])
+        with role_actions.window('owner', 'default', 'group'):
+            for index in range(50):
+                chat_history.append(f'turn-{index}', 0, 'user', f'闲聊第{index}轮 ' + '日常' * 210)
+                chat_history.append(f'turn-{index}', 1, 'assistant', '好的' * 210, '小婉')
+            _, payload = server.actor_payload('wan', [
+                {'role': 'user', 'content': '上次植物园约定后来怎么处理的？'},
+            ], True)
+            _, generic_recall = server.actor_payload('wan', [
+                {'role': 'user', 'content': '上次答应我什么？'},
+            ], True)
+        evidence = next(m['content'] for m in payload if m['content'].startswith('本轮关键记忆：'))
+        self.assertIn('cancelled', evidence)
+        self.assertIn('植物园约定取消，周末不去了。', evidence)
+        self.assertIn('2026-11-01T09:30:00+08:00', evidence)
+        text = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn('周六出发', text)
+        self.assertNotIn('紫色手套', text)
+        self.assertLessEqual(sum(len(m['content']) for m in payload), 9000)
+        self.assertTrue(any('植物园约定取消，周末不去了。' in m['content'] for m in generic_recall))
+
     def test_direct_question_routes_without_coordinator_model_and_actor_still_decides(self):
         token=group_coordinator.discussion_state.set({'last_speaker':'wan','messages_this_exchange':1,'declined_current_context':[]})
         try:
@@ -108,6 +157,19 @@ class EfficiencyTests(unittest.TestCase):
             with model_usage.Measure('action',{'model':'test'},[]) as meter:raise ValueError('private-error')
         result=model_usage.report('owner')['categories']['action']
         self.assertEqual(result['failed'],1);self.assertEqual(result['calls_with_token_usage'],0)
+
+    def test_model_cache_rate_counts_only_calls_reporting_cache_usage(self):
+        for model, input_tokens, cached_tokens in [
+            ('a', 100, 70), ('a', 200, 0), ('a', 500, None), ('b', 50, None),
+        ]:
+            with model_usage.Measure('character', {'model': model}, []) as meter:
+                meter.observe(S(usage=S(prompt_tokens=input_tokens, prompt_cache_hit_tokens=cached_tokens)))
+        report = model_usage.report('owner')['character_cache_by_model']
+        self.assertEqual(report['a']['calls'], 3)
+        self.assertEqual(report['a']['reported_calls'], 2)
+        self.assertEqual(report['a']['input_tokens'], 300)
+        self.assertAlmostEqual(report['a']['hit_rate'], 70 / 300)
+        self.assertIsNone(report['b']['hit_rate'])
 
     def test_stream_usage_compatibility_fallback_keeps_reply_and_real_usage(self):
         class Unsupported(Exception):status_code=400

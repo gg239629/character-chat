@@ -19,6 +19,15 @@ class ContextBudgetTests(unittest.TestCase):
         self.assertIn(data[-1],result);self.assertIn(data[-2],result);self.assertIn(data[2],result)
         self.assertNotIn(data[1],result)
 
+    def test_key_evidence_precedes_older_complete_rounds(self):
+        prefix = {'role': 'system', 'content': '固定人设'}
+        old_round = [{'role': 'user', 'content': '旧问题' * 10},
+                     {'role': 'assistant', 'content': '旧回答' * 10}]
+        evidence = {'role': 'system', 'content': '本轮关键记忆：约定已取消'}
+        latest = {'role': 'user', 'content': '上次的约定呢？'}
+        self.assertEqual(fit([prefix, evidence, *old_round, latest], 70),
+                         [prefix, evidence, latest])
+
     def test_dialogue_window_expands_only_for_followups_or_unfinished_work(self):
         from backend.app.characters.context_budget import dialogue_window
         messages=[]

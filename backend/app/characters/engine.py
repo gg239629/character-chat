@@ -125,9 +125,10 @@ def character_profile(role: str | None = None) -> str:
         text += "\n" + services.prompts().read_text(services.prompts().personal_memory(role))
     return text
 
-def build_prompt_parts(role: str | None = None) -> tuple[str, str]:
-    """返回 (稳定块, 动态块)。稳定块每轮不变，放前面吃前缀缓存；动态块只有场景状态。"""
+def build_prompt_parts(role: str | None = None, *, query: str | None = None) -> tuple[str, str]:
+    """Return a fixed prefix and the additional context for this turn."""
     stable: list[str] = []
+    dynamic: list[str] = []
 
     prompt_text = services.prompts().read_text(services.prompts().PROMPT_FILE).strip()
     if prompt_text:
@@ -138,26 +139,26 @@ def build_prompt_parts(role: str | None = None) -> tuple[str, str]:
     if inject_text:
         stable.append(inject_text)
 
-    memory_text = services.prompts().read_text(services.prompts().MEMORY_MD).strip()
-    if role:
-        # One actor only ever reads the shared archive plus her own file.
-        memory_text = (memory_text + "\n\n" + services.prompts().read_text(services.prompts().personal_memory(role)).strip()).strip()
     if services.world().shared_world_data().get('memory_reset_at'):
-        # The archive is reference material and survives a reset intact; only chat history is cleared.
-        stable.append('这是已重置的新故事，从当前现实时间重新开始。数据库里的旧聊天、场景和关系进展不作为已经发生过的事；'
-                      '角色档案里的性格、身体设定、关系背景和共同经历照旧有效，可以当作她记得的事来引用。')
-    from backend.app.characters.context_budget import topic,select_profile
-    if topic.get() is not None:
-        shared=services.prompts().read_text(services.prompts().MEMORY_MD)
-        own=services.prompts().read_text(services.prompts().personal_memory(role)) if role else ''
-        memory_text=select_profile(shared,topic.get(),1000)+'\n'+select_profile(own,topic.get(),1500)
+        dynamic.append('这是已重置的新故事，从当前现实时间重新开始。数据库里的旧聊天、场景和关系进展不作为已经发生过的事；'
+                       '角色档案里的性格、身体设定、关系背景和共同经历照旧有效，可以当作她记得的事来引用。')
+    shared = services.prompts().read_text(services.prompts().MEMORY_MD).strip()
+    own = services.prompts().read_text(services.prompts().personal_memory(role)).strip() if role else ''
+    if query is None:
+        memory_text = '\n\n'.join(part for part in (shared, own) if part)
+        state = services.world().model_scene()
+        if state:
+            dynamic.append("# 当前场景状态\n" + json.dumps(state, ensure_ascii=False, indent=2))
+    else:
+        from backend.app.characters.context_budget import profile_parts
+        shared_core, shared_details = profile_parts(shared, query, 1000)
+        own_core, own_details = profile_parts(own, query, 1500)
+        memory_text = '\n\n'.join(part for part in (shared_core, own_core) if part)
+        details = '\n\n'.join(part for part in (shared_details, own_details) if part)
+        if details:
+            dynamic.append("# 本轮相关角色档案\n" + details)
     if memory_text:
         stable.append("# 角色档案与记忆\n" + memory_text)
-
-    dynamic: list[str] = []
-    state = services.world().model_scene()
-    if state:
-        dynamic.append("# 当前场景状态\n" + json.dumps(state, ensure_ascii=False, indent=2))
 
     s = "\n\n".join(stable) if stable else "按系统指定角色自然回应当前消息。"
     d = "\n\n".join(dynamic)
@@ -349,26 +350,35 @@ def actor_payload(role, messages, group):
         cfg = services.models().load_config()
         persona = storage.read_document("persona", "")
         relationship = storage.read_document("relationship", "")
-        own_state=world['data'].get('role_states',{}).get(role,{})
         name = services.world().PRIVATE_NAMES[role]
-        from backend.app.characters import context_budget
-        query=role_memory.query_for(messages)
-        selection=context_budget.topic.set(query)
-        try:stable, _ = services.prompts().build_prompt_parts(role)
-        finally:context_budget.topic.reset(selection)
-        current_context=context_budget.dialogue_window(role_memory.recent_dialogue(user,world['id'],role,messages,group))
+        from backend.app.characters import actor_instructions, context_budget
+        query = role_memory.query_for(messages)
+        stable, profile_details = services.prompts().build_prompt_parts(role, query=query)
+        recent_context = role_memory.recent_dialogue(user, world['id'], role, messages, group)
+        current_context = context_budget.dialogue_window(recent_context)
+        brief = context_budget.brief_continuation(query)
+        recall = context_budget.expand_dialogue(recent_context) or (not brief and context_budget.needs_recall(query))
         receipt_fact=role_actions.received_contact_status(user,world['id'],role,
             next((m.get('content','') for m in reversed(messages) if m['role']=='user'),''))
-        query=role_memory.query_for(messages)
-        memory=role_memory.remember(user,world['id'],role,query,group,
-            exclude_ids=[m['id'] for m in current_context if m.get('id')],
-            exclude_texts=[m.get('content','') for m in current_context])
         from backend.app.world import actor_context
         facts,history,communication=actor_context.build(user,world['id'],role,query,current_context)
         payload=[{'role':'system','content':stable},
+            {'role':'system','content':actor_instructions.render(name,group,persona,relationship)},
             {'role':'system','content':'当前事实与明确设定：'+json.dumps(facts,ensure_ascii=False,separators=(',',':'))+
-             '\n本人状态和recent_actions来自所有本人参与窗口的共享事实；它们比当前窗口旧消息更新时，不能继续沿用旧动作。记得自己的动作不等于可以公开私聊内容。\n时间以当前事实为准。stale仅表示最后观察可能过时，不证明活动完成或位置改变；未知保持未知。'},
-            {'role':'system','content':role_memory.render(memory) if memory['events'] else '当前无需额外历史检索，以近期原文及明确设定为准。'}]
+             '\n本人状态和recent_actions来自所有本人参与窗口的共享事实；它们比当前窗口旧消息更新时，不能继续沿用旧动作。记得自己的动作不等于可以公开私聊内容。\n时间以当前事实为准。stale仅表示最后观察可能过时，不证明活动完成或位置改变；未知保持未知。'}]
+        if profile_details:
+            payload.append({'role':'system','content':profile_details})
+        if recall or not brief:
+            memory = role_memory.remember(
+                user, world['id'], role, query, group, budget=3000 if recall else 1800,
+                exclude_ids=[m['id'] for m in current_context if m.get('id')],
+                exclude_texts=[m.get('content','') for m in current_context],
+                recall_budget=1200 if recall else 0,
+            )
+            if memory['recall']:
+                payload.append({'role':'system','content':role_memory.render_recall(memory['recall'])})
+            if memory['events']:
+                payload.append({'role':'system','content':role_memory.render(memory)})
         if history:
             payload.append({'role':'system','content':'本轮相关历史证据（历史动作不等于当前仍在进行；听说不等于亲历）：'+json.dumps(history,ensure_ascii=False,separators=(',',':'))})
         if communication:
@@ -378,8 +388,6 @@ def actor_payload(role, messages, group):
             from backend.app.runtime.goal_mode import active_goal
             if active_goal.get():payload.append({'role':'system','content':'本轮群聊围绕用户目标自然交流：'+active_goal.get()+'。只推进有价值的新内容，保留本人的性格和判断，不强行赞同，不向用户播报目标判断或达成状态。'})
         payload += [{'role':m['role'],'content':m['content']} for m in current_context]
-        from backend.app.characters import actor_instructions
-        payload.append({'role':'system','content':actor_instructions.render(name,group,persona,relationship)})
         used=services.prompts().recent_phrases(current_context,name)
         if used:
             payload.append({'role':'system','content':

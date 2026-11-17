@@ -75,7 +75,9 @@ class ActorTests(unittest.TestCase):
         def model(cfg):
             async def create(**kwargs):
                 calls.append((cfg['model'],kwargs['messages']))
-                name=next(name for name in actors.ROLES.values() if '你只扮演'+name in kwargs['messages'][-1]['content'])
+                name=next(name for name in actors.ROLES.values() if any(
+                    message['role']=='system' and message['content'].startswith('你只扮演'+name)
+                    for message in kwargs['messages']))
                 async def chunks():
                     yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=name+'：'+{'小婉':'周六一起看电影。','小研':'我想去书店选一本书。','小柳':'我更想去植物园看花。'}[name]))])
                 return chunks()
@@ -406,7 +408,9 @@ class ActorTests(unittest.TestCase):
         calls=[]
         def model(cfg):
             async def create(**kwargs):
-                name=next(name for name in actors.ROLES.values() if '你只扮演'+name in kwargs['messages'][-1]['content'])
+                name=next(name for name in actors.ROLES.values() if any(
+                    message['role']=='system' and message['content'].startswith('你只扮演'+name)
+                    for message in kwargs['messages']))
                 calls.append((name,kwargs['messages']))
                 if name=='小婉':
                     # Previous role's actual message has already been committed, not a draft.

@@ -144,13 +144,28 @@ def report(user,days=7):
               for row in db.scalars(select(Usage).where(Usage.user_id==user,Usage.created_at>=cutoff))]
     with _LOCK:rows += [dict(row) for engine,row in _QUEUE if engine is storage.get_store().engine and row['user_id']==user and row['created_at']>=cutoff]
     result={}
+    cache_by_model={}
     for row in rows:
         item=result.setdefault(row['kind'],{'calls':0,'failed':0,'elapsed_ms':0,'input_chars':0,'output_chars':0,
                                            'input_tokens':0,'output_tokens':0,'cached_tokens':0,'calls_with_token_usage':0})
         item['calls']+=1;item['failed']+=not row['success']
         for key in ('elapsed_ms','input_chars','output_chars','input_tokens','output_tokens','cached_tokens'):item[key]+=row[key] or 0
         item['calls_with_token_usage']+=row['input_tokens'] is not None
-    return {'days':days,'categories':result,'runs':run_report(user),'note':'Token totals cover only calls where the provider returned usage; characters are not token estimates.'}
+        if row['kind']=='character':
+            cache=cache_by_model.setdefault(row['model'], {
+                'calls':0, 'reported_calls':0, 'input_tokens':0, 'cached_tokens':0, 'hit_rate':None,
+            })
+            cache['calls']+=1
+            inputs, hits = row['input_tokens'], row['cached_tokens']
+            if inputs is not None and hits is not None and 0 <= hits <= inputs and inputs > 0:
+                cache['reported_calls']+=1
+                cache['input_tokens']+=inputs
+                cache['cached_tokens']+=hits
+    for cache in cache_by_model.values():
+        if cache['input_tokens']:
+            cache['hit_rate']=cache['cached_tokens']/cache['input_tokens']
+    return {'days':days,'categories':result,'runs':run_report(user),'character_cache_by_model':cache_by_model,
+            'note':'Token totals cover only calls where the provider returned usage; characters are not token estimates.'}
 
 
 def run_report(user):

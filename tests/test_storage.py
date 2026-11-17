@@ -190,7 +190,9 @@ class StorageTests(unittest.TestCase):
     def test_stream_publishes_only_group_history(self):
         from types import SimpleNamespace
         async def create(**kwargs):
-            content='小研：周六看电影。' if '你只扮演小研' in kwargs['messages'][-1]['content'] else '[[SILENT]]'
+            is_yan = any(message['role']=='system' and message['content'].startswith('你只扮演小研')
+                         for message in kwargs['messages'])
+            content='小研：周六看电影。' if is_yan else '[[SILENT]]'
             async def chunks():
                 yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=content))])
             return chunks()
