@@ -1,10 +1,59 @@
-# Character Chat · AI 角色聊天
+# Character Chat · 多角色 AI 会话平台
 
-和小婉、小研、小柳私聊或群聊。角色会记住聊过的事，随对话更新场景，并可在你开启主动消息后发起联系。
+Character Chat 是一个支持多角色协作、长期记忆和持续世界状态的全栈 AI 会话平台。系统在群聊中动态决定下一位发言角色，为每个角色构建权限范围内的上下文，并通过持久化任务处理消息、回复和后台状态更新。Web 与 MCP 客户端共用角色服务。
 
 **[在线体验](https://private-character-chat.onrender.com)** · [本地启动](#本地启动) · [部署与文档](#部署与文档)
 
 在线站点采用邀请注册。新用户请向站点管理员获取邀请码，登录后在设置里填写自己的模型配置。首次访问可能需要等待 Render 唤醒服务。
+
+## 功能
+
+```mermaid
+flowchart TB
+    subgraph Entry["接入与权限"]
+        Web["Vue 3 · 私聊 / 群聊"] --> HTTP["FastAPI · 账号会话与通道校验"]
+        Client["外部 MCP 客户端"] --> MCP["MCP · 授权范围与用量预算"]
+        HTTP --> Service["CharacterService · 统一角色服务"]
+        MCP --> Service
+    end
+
+    subgraph Runtime["持久任务与角色编排"]
+        Service --> Inbox["消息落库 · 回复任务入队"]
+        Inbox --> Graph["LangGraph · 校验与任务执行"]
+        Graph --> Route{"聊天通道"}
+        Route -->|"私聊"| Actor["单角色生成"]
+        Route -->|"群聊"| Group["群聊子图 · 逐次提名发言者"]
+        Group --> Actor
+        Actor --> Context["角色上下文 · 按可见范围装配"]
+        Context --> Model["OpenAI 兼容接口 · 按角色路由"]
+        Model --> Delivery["回复持久化 · 投递与回执"]
+        Delivery -.->|"重新判断是否继续发言"| Group
+    end
+
+    subgraph State["记忆、状态与后台任务"]
+        ACL["权限过滤"] --> Recall["BM25 + 可选 LlamaIndex 向量检索"]
+        Recall --> Context
+        World["当前场景 · 事件与知情范围"] --> Context
+        Delivery --> Worker["后台维护 · 场景更新 / 归档"]
+        Worker --> World
+        Worker --> ACL
+        DB[("SQLite / PostgreSQL")] --- Inbox
+        DB --- Delivery
+        DB --- World
+        DB --- ACL
+        Checkpoint[("LangGraph Checkpoint")] --- Graph
+    end
+
+    Delivery --> Events["SSE 刷新信号 · 消息增量读取"]
+    Events --> Web
+```
+
+| 能力 | 实现 |
+| --- | --- |
+| 多角色会话 | 支持私聊和群聊。群聊按最新发言动态调度，各角色可独立配置文字模型。 |
+| 长期记忆与状态 | 按角色和会话权限检索历史证据，结合当前场景和已确认事件生成回复。 |
+| 异步消息与主动触达 | 接收消息后持久化回复任务，支持增量同步和可选的角色主动联系。 |
+| 多模态与 MCP | 支持独立配置生图和语音模型，外部客户端可使用有范围和额度限制的 MCP 授权。 |
 
 ## 本地启动
 
@@ -49,15 +98,6 @@ printf '本地注册邀请码：%s\n' "$REGISTRATION_INVITE_CODE"
 3. 选择「大家一起」进入群聊，或打开任意一位角色的私聊。
 
 账号与聊天记录保存在本地 `data/chat.db`，重启后可用原账号登录。Windows 上已有 `data/local-accounts.json` 的安装继续使用文件中的邀请码。
-
-## 功能
-
-| 功能 | 可以做什么 |
-| --- | --- |
-| 私聊和群聊 | 与三位角色分别私聊，或在同一个群里互动。各角色可单独配置文字模型。 |
-| 长期记忆和主动消息 | 延续聊天记忆和场景状态，按需开启角色主动联系。 |
-| 图片和语音 | 配置对应的模型后，可在聊天里生成图片和接收角色语音。 |
-| MCP 接入 | 为外部客户端签发授权，控制它能访问的角色和调用额度。 |
 
 ## 部署与文档
 
