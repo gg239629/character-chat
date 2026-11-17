@@ -177,7 +177,7 @@ class ActorTests(unittest.TestCase):
             self.assertEqual(client.get('/api/messages',headers={'X-Chat-Channel':'wan'}).json()['messages'],[])
 
     def test_database_copy_includes_messages(self):
-        from migrate_to_postgres import copy_rows
+        from scripts.migrate_to_postgres import copy_rows
         chat_history.bootstrap()
         chat_history.append('migrate',0,'user','迁移消息')
         target=storage.Store('sqlite:///'+(Path(self.tmp.name)/'destination.db').as_posix())

@@ -4,11 +4,10 @@
 
 ## 首次启用（先绑定旧数据，再开放登录）
 
-在项目目录、**连接到目标数据库**的环境执行。默认本地是 `data/chat.db`；云端是 Render 的 `DATABASE_URL`。在本地创建账号不会自动修改 Neon。保持现有 `APP_ENCRYPTION_KEY`，不要重新生成。
+在仓库根目录使用已安装项目依赖的 Python，并连接到目标数据库。默认本地是 `data/chat.db`；云端是 Render 的 `DATABASE_URL`。在本地创建账号不会自动修改 Neon。保持现有 `APP_ENCRYPTION_KEY`，不要重新生成。
 
 ```powershell
-cd D:\AIWork\Github\character-chat
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" manage_accounts.py create-owner admin
+python -m scripts.manage_accounts create-owner admin
 ```
 
 按提示私密输入密码两次。此命令把 `admin` 绑定到已有 `owner` 身份，保留 default 会话、三人私聊、隐藏私聊、聊天原文、场景、归档、头像、模型配置及后台任务；不复制或重写聊天数据。第一个普通注册用户不会获得这些数据。重复绑定会报错，不会覆盖旧账号。若要更新 Neon，请在配置了对应 `DATABASE_URL` 的终端执行，完成后清除临时连接变量。不要把连接串贴到聊天或提交 Git。
@@ -16,7 +15,7 @@ cd D:\AIWork\Github\character-chat
 生成一份邀请码：
 
 ```powershell
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" manage_accounts.py invite-code
+python -m scripts.manage_accounts invite-code
 ```
 
 将生成值保存在环境变量 `REGISTRATION_INVITE_CODE`，不是代码文件。该邀请码是共享邀请口令，可以多次注册，轮换后旧码失效，不是一次性邀请。
@@ -27,7 +26,7 @@ cd D:\AIWork\Github\character-chat
 $env:ENABLE_USER_ACCOUNTS = "true"
 $env:REGISTRATION_MODE = "invite"
 $env:REGISTRATION_INVITE_CODE = Read-Host "粘贴刚才生成的邀请码"
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" -m uvicorn server:app --host 127.0.0.1 --port 8788 --reload
+python -m uvicorn server:app --host 127.0.0.1 --port 8788 --reload
 ```
 
 在 Render Environment 设置同样三个变量，然后重新部署。先在 Neon 上完成 `create-owner`，再开启账号开关。`REGISTRATION_MODE` 支持 `invite`（默认）、`closed`（关闭注册）、`open`（公开注册）。邀请模式缺少至少16字符的邀请码时拒绝注册。若有代理导致请求来源识别不同，可设置 `PUBLIC_ORIGIN=https://你的实际域名`，不带末尾 `/`。
@@ -45,7 +44,7 @@ $env:REGISTRATION_INVITE_CODE = Read-Host "粘贴刚才生成的邀请码"
 ## 管理员重置密码
 
 ```powershell
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" manage_accounts.py reset-password 用户名
+python -m scripts.manage_accounts reset-password 用户名
 ```
 
 需要数据库操作权限，密码不会出现在命令参数中。此功能没有公开 HTTP 重置接口，不提供任何默认万能密码。

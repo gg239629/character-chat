@@ -17,7 +17,7 @@ def main():
     try:
         with engine.connect() as connection:
             count = connection.execute(text("SELECT count(*) FROM chat_conversations")).scalar_one()
-        folder = Path(__file__).resolve().parent / "data"
+        folder = Path(__file__).resolve().parents[1] / "data"
         folder.mkdir(exist_ok=True)
         target = folder / "database-url.txt"
         temporary = target.with_suffix(".tmp")

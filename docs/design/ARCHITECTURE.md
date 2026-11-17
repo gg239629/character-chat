@@ -16,7 +16,7 @@
 | `backend/app/mcp` | MCP 工具、客户端凭据及权限 |
 | `migrations` | Alembic 版本迁移 |
 
-根目录 `server.py` 是旧入口的兼容层，真实入口为 `backend.app.main:app`。旧管理脚本仍可执行；旧模块的对应关系见 `backend/MODULE_MAP.json`。业务模块通过 `core/context.py` 的上下文和 `core/services.py` 的应用服务访问依赖，不再导入根目录 server。
+根目录 `server.py` 是旧入口的兼容层，真实入口为 `backend.app.main:app`。管理脚本位于 `scripts/`，使用方式见[维护命令](../README.md#维护命令)。旧模块的对应关系见 `backend/MODULE_MAP.json`。业务模块通过 `core/context.py` 的上下文和 `core/services.py` 的应用服务访问依赖。
 
 API 装配层仍保留部分兼容函数和描述功能。网页统一使用 Vue 构建产物，旧 HTML、设置脚本及其专用测试已移除；未构建时明确返回 503 和构建提示，不回退到过期界面。通知脚本与 Service Worker 仍由新版使用。此次没有更改角色人设。
 

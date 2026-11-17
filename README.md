@@ -65,9 +65,9 @@ printf '本地注册邀请码：%s\n' "$REGISTRATION_INVITE_CODE"
 
 | 主题 | 文档 |
 | --- | --- |
-| 部署与持久化 | [数据库与迁移](DATABASE.md) · [账号与邀请注册](ACCOUNTS.md) |
-| 聊天与角色 | [私聊和群聊](CHAT_CHANNELS.md) · [主动消息](ACTIVE_MESSAGES.md) · [世界状态](WORLD_STATE.md) |
-| 模型和集成 | [图片生成](IMAGES.md) · [MCP 接入](MCP.md) · [模型用量](EFFICIENCY.md) |
-| 开发 | [项目架构](ARCHITECTURE.md) |
+| 部署与持久化 | [数据库与迁移](docs/guides/DATABASE.md) · [账号与邀请注册](docs/guides/ACCOUNTS.md) |
+| 聊天与角色 | [私聊和群聊](docs/guides/CHAT_CHANNELS.md) · [主动消息](docs/guides/ACTIVE_MESSAGES.md) · [世界状态](docs/design/WORLD_STATE.md) |
+| 模型和集成 | [图片生成](docs/guides/IMAGES.md) · [MCP 接入](docs/guides/MCP.md) · [模型用量](docs/design/EFFICIENCY.md) |
+| 开发与维护 | [项目架构](docs/design/ARCHITECTURE.md) · [完整文档与维护命令](docs/README.md) |
 
 前端使用 Vue 3、TypeScript 和 Vite，后端使用 FastAPI 和 LangGraph。本地使用 SQLite，云端使用 PostgreSQL。

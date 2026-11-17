@@ -7,7 +7,7 @@ from backend.app.conversations import push_notifications
 
 
 def main():
-    root=Path(__file__).resolve().parent/'data'
+    root=Path(__file__).resolve().parents[1]/'data'
     root.mkdir(exist_ok=True)
     path=root/'background.env'
     if path.exists():

@@ -38,12 +38,11 @@
 
 ## 本地启动
 
-安装更新依赖并重启原服务：
+在仓库根目录使用项目的 Python 环境更新依赖，然后重启服务：
 
 ```powershell
-cd D:\AIWork\Github\character-chat
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" -m pip install -r requirements.txt
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" -m uvicorn server:app --host 127.0.0.1 --port 8788 --reload
+uv pip install -r requirements.lock
+python -m uvicorn server:app --host 127.0.0.1 --port 8788 --reload
 ```
 
 后台使用 APScheduler，每分钟执行一次。RUN_ROLE_SCHEDULER=false 可关闭进程内调度。SQLAlchemy 自动建立新增表，不手工改写原消息。
@@ -60,10 +59,10 @@ cd D:\AIWork\Github\character-chat
 4. 在支持带请求头的外部定时服务中，每 5–10 分钟 POST `https://你的域名/api/jobs/tick`，请求头 `Authorization: Bearer 你的ROLE_CRON_TOKEN`。不能把令牌放在公开 URL 或仓库中。
 5. 在 HTTPS 网站点击“开启通知”，由浏览器授权并保存订阅。
 
-可以运行以下命令，在本机生成用于部署的配置文件，密钥不会直接打印到终端：
+在仓库根目录使用已安装项目依赖的 Python 运行以下命令，生成部署配置文件：
 
 ```powershell
-& "D:\Work\AI_Python\AI\.venv\Scripts\python.exe" configure_background.py
+python -m scripts.configure_background
 ```
 
 生成 `data/background.env`，在本机打开，把需要新增的值复制到 Render。**如果云端已经使用另一份 APP_ENCRYPTION_KEY，继续使用云端原值，不可被本地值覆盖。** 文件存在时脚本不会覆盖旧密钥。

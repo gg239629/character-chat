@@ -72,7 +72,7 @@ def copy_rows(source_path, destination):
 
 
 def main():
-    source = Path(__file__).resolve().parent / "data" / "chat.db"
+    source = Path(__file__).resolve().parents[1] / "data" / "chat.db"
     if not source.exists():
         raise RuntimeError("Local data/chat.db is missing")
     backups = source.parent / "backups"

@@ -1,6 +1,6 @@
 # 数据库存储与账号隔离
 
-使用 FastAPI 和 OpenAI 兼容 SDK，SQLAlchemy 2.x 管理 SQLite / PostgreSQL。LangGraph 管理回复执行与群聊调度；可选 LlamaIndex 语义检索与原词法检索融合，默认不开启 Embedding。结构与迁移说明见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+使用 FastAPI 和 OpenAI 兼容 SDK，SQLAlchemy 2.x 管理 SQLite / PostgreSQL。LangGraph 管理回复执行与群聊调度；可选 LlamaIndex 语义检索与原词法检索融合，默认不开启 Embedding。结构与迁移说明见 [ARCHITECTURE.md](../design/ARCHITECTURE.md)。
 
 ## 本地运行
 

@@ -150,7 +150,7 @@ class MaintenanceTests(unittest.TestCase):
         work.finish(scene.id,lane,token,True)
 
     def test_database_migration_keeps_pending_work(self):
-        from migrate_to_postgres import copy_rows
+        from scripts.migrate_to_postgres import copy_rows
         self.seed()
         destination=storage.Store('sqlite:///'+(Path(self.tmp.name)/'copy.db').as_posix())
         try:

@@ -24,3 +24,8 @@ static/web/
 
 # Editor-local configuration
 .idea/
+
+# Local diagnostic logs
+/logs/
+hs_err_pid*.log
+replay_pid*.log
