@@ -1,49 +1,73 @@
-# Character Chat
+# Character Chat · AI 角色聊天
 
-网页与外部 MCP 客户端共用人物服务，消息接收与回复任务分离。后端按账号、人物、聊天、世界状态、记忆和运行时分层；前端使用 Vue 3、TypeScript 和 Vite。
+和小婉、小研、小柳私聊或群聊。角色会记住聊过的事，随对话更新场景，并可在你开启主动消息后发起联系。
 
-结构、LangGraph 调度、可选 LlamaIndex 检索及数据库迁移见 [ARCHITECTURE.md](ARCHITECTURE.md)；外部人物调用见 [MCP.md](MCP.md)。
+**[在线体验](https://private-character-chat.onrender.com)** · [本地启动](#本地启动) · [部署与文档](#部署与文档)
 
-人物状态、空间关系、持久事件历史和发言上下文的更新规则见 [WORLD_STATE.md](WORLD_STATE.md)。
-
-聊天图片生成、独立图片模型配置和持久保存见 [IMAGES.md](IMAGES.md)。
+在线站点采用邀请注册。新用户请向站点管理员获取邀请码，登录后在设置里填写自己的模型配置。首次访问可能需要等待 Render 唤醒服务。
 
 ## 本地启动
 
-现有本地账号配置仍有效。在项目目录执行：
+准备 Git、Node.js 22（含 npm）、uv，以及一套可用的 OpenAI 兼容文字模型配置（接口地址、模型名称和 API Key）。
+
+### Windows
+
+在 PowerShell 中运行：
 
 ```powershell
+git clone https://github.com/gg239629/character-chat.git
+cd character-chat
 powershell -ExecutionPolicy Bypass -File .\start_local.ps1
 ```
 
-启动脚本使用本地 SQLite，首次或前端源代码变化后自动构建网页，然后启动 http://127.0.0.1:8788 。前端构建需要 Node.js 22 和 npm。自定义环境可单独执行 `npm ci`、`npm run build`（在 frontend 目录），再用 `python -m uvicorn backend.app.main:app` 启动。旧的 `server:app` 入口保留兼容。
+脚本会创建项目内的 Python 环境、安装锁定依赖、构建前端并启动本地服务。
 
-本地或局域网 IP（如 `http://192.168.95.1:56828/v1`）及 localhost 模型接口自动直连，避免 `HTTP_PROXY`、`HTTPS_PROXY` 等环境代理拦截请求而返回 502。公网模型接口继续沿用环境代理设置；该规则同时用于连接测试、角色聊天、场景维护、历史摘要和向量检索，不需要关闭系统代理。
+<details>
+<summary>macOS / Linux</summary>
 
-## Render 免费部署
+在终端运行：
 
-将本目录上传到 GitHub 私有仓库，然后在 Render 使用 New → Blueprint 连接此仓库。render.yaml 已固定 plan: free。
+```bash
+git clone https://github.com/gg239629/character-chat.git
+cd character-chat
+uv venv --python 3.13
+uv pip install --python .venv/bin/python -r requirements.lock
+npm --prefix frontend ci
+npm --prefix frontend run build
 
-创建时填写 MODEL_API_KEY、MODEL_BASE_URL、MODEL_MODEL。APP_PASSWORD 自动随机生成，可在 Render Environment 中查看，登录用户名默认 owner。
+export ENABLE_USER_ACCOUNTS=true
+export REGISTRATION_MODE=invite
+export REGISTRATION_INVITE_CODE="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(24))')"
+printf '本地注册邀请码：%s\n' "$REGISTRATION_INVITE_CODE"
+.venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8788
+```
 
-部署完成后访问 Render 分配的 HTTPS 地址。/healthz 为健康检查。个人模式使用共享密码；启用账号模式后改为网站登录，不再使用浏览器 Basic Auth。登录注册、邀请和旧数据绑定见 [ACCOUNTS.md](ACCOUNTS.md)。
+</details>
 
-注意：免费实例闲置可能休眠，恢复访问有冷启动。免费实例本地磁盘非持久，重启或重新部署可能丢失在线保存的聊天和设置。模型 API 调用费用另算。
+1. 打开 [http://127.0.0.1:8788](http://127.0.0.1:8788)，首次使用时用终端显示的临时邀请码注册，再用自己的账号登录。
+2. 进入主页左下角的 **设置 → 模型 → 文字**，填写接口地址、模型名称和 API Key，测试连接并保存。
+3. 选择「大家一起」进入群聊，或打开任意一位角色的私聊。
 
-部署包包含原有角色资料及聊天记忆，仅上传私有仓库。配置文件中的 API 密钥和本机 env_file 路径已移除，密钥通过 Render 环境变量配置。
+账号与聊天记录保存在本地 `data/chat.db`，重启后可用原账号登录。Windows 上已有 `data/local-accounts.json` 的安装继续使用文件中的邀请码。
 
+## 功能
 
-## 数据库存储更新
+| 功能 | 可以做什么 |
+| --- | --- |
+| 私聊和群聊 | 与三位角色分别私聊，或在同一个群里互动。各角色可单独配置文字模型。 |
+| 长期记忆和主动消息 | 延续聊天记忆和场景状态，按需开启角色主动联系。 |
+| 图片和语音 | 配置对应的模型后，可在聊天里生成图片和接收角色语音。 |
+| MCP 接入 | 为外部客户端签发授权，控制它能访问的角色和调用额度。 |
 
-本地 SQLite 与外部 PostgreSQL 配置、旧记忆导入规则、账号隔离和测试方法见 [DATABASE.md](DATABASE.md)。Render 更新前必须配置 DATABASE_URL；未配置时拒绝使用临时磁盘保存记忆。
+## 部署与文档
 
-角色代理、消息自动入库、群聊顺序发言和 API Key 加密说明见 [CHAT_CHANNELS.md](CHAT_CHANNELS.md)。更新需安装 requirements.txt；Render 还需配置稳定的 APP_ENCRYPTION_KEY 用于加密数据库中的模型密钥。
+仓库提供 `Dockerfile` 和 Render Blueprint（`render.yaml`）。在 Render 中选择 **New → Blueprint** 并连接仓库，配置 PostgreSQL 的 `DATABASE_URL`、稳定的 `APP_ENCRYPTION_KEY` 和 Blueprint 要求的模型及通知变量。部署后用 `/healthz` 检查服务状态。
 
-跨会话传话、角色自主联系、角色间有限回应、后台调度及 Web Push 部署见 [ACTIVE_MESSAGES.md](ACTIVE_MESSAGES.md)。主动消息可在主页左下角“设置”中统一开关；明确要求角色在群聊发消息时，她可以接受、拒绝或追问。
+| 主题 | 文档 |
+| --- | --- |
+| 部署与持久化 | [数据库与迁移](DATABASE.md) · [账号与邀请注册](ACCOUNTS.md) |
+| 聊天与角色 | [私聊和群聊](CHAT_CHANNELS.md) · [主动消息](ACTIVE_MESSAGES.md) · [世界状态](WORLD_STATE.md) |
+| 模型和集成 | [图片生成](IMAGES.md) · [MCP 接入](MCP.md) · [模型用量](EFFICIENCY.md) |
+| 开发 | [项目架构](ARCHITECTURE.md) |
 
-模型用量统计、上下文去重、按需检索和群聊统一辅助模型路由见 [EFFICIENCY.md](EFFICIENCY.md)。
-
-
-当前提示词由 prompt/system.md、角色档案、backend/app/characters/actor_instructions.py 和受权限过滤的动态上下文组成。本次结构迁移保留已有角色资料。
-
-本地启动脚本使用项目内 `.venv`，首次启动或锁文件变化时通过 uv 安装锁定依赖，避免共享环境升级 MCP 等包影响本项目。无需手动激活环境。
+前端使用 Vue 3、TypeScript 和 Vite，后端使用 FastAPI 和 LangGraph。本地使用 SQLite，云端使用 PostgreSQL。

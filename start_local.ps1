@@ -19,15 +19,23 @@ if (-not (Test-Path -LiteralPath $projectPython) -or -not (Test-Path -LiteralPat
     Set-Content -LiteralPath $lockStamp -Value $lockHash -Encoding ASCII
 }
 $profilePath = Join-Path $projectDirectory 'data/local-accounts.json'
-if (-not (Test-Path -LiteralPath $profilePath)) {
-    throw 'Local account configuration not found: data/local-accounts.json'
+$temporaryInvite = $null
+if (Test-Path -LiteralPath $profilePath) {
+    $accountProfile = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $inviteCode = [string]$accountProfile.invite_code
+    if ($inviteCode.Length -lt 16) { throw 'The invite_code in data/local-accounts.json must be at least 16 characters.' }
+} else {
+    $temporaryInvite = & $projectPython -c 'import secrets; print(secrets.token_urlsafe(24))'
+    if ($LASTEXITCODE -ne 0 -or -not $temporaryInvite) { throw 'Local invite generation failed' }
+    $inviteCode = $temporaryInvite
 }
-$accountProfile = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
 $env:ENABLE_USER_ACCOUNTS = 'true'
 $env:REGISTRATION_MODE = 'invite'
-$env:REGISTRATION_INVITE_CODE = $accountProfile.invite_code
+$env:REGISTRATION_INVITE_CODE = $inviteCode
 # Keep this launcher on the local database even if a parent terminal has cloud variables.
-$localDatabase = (Join-Path $projectDirectory 'data/chat.db').Replace('\', '/')
+$dataDirectory = Join-Path $projectDirectory 'data'
+[void][System.IO.Directory]::CreateDirectory($dataDirectory)
+$localDatabase = (Join-Path $dataDirectory 'chat.db').Replace('\', '/')
 $env:DATABASE_URL = 'sqlite:///' + $localDatabase
 $env:OPENBLAS_NUM_THREADS = '1'
 $env:OMP_NUM_THREADS = '1'
@@ -35,12 +43,16 @@ $frontendEntry = Join-Path $projectDirectory 'static/web/index.html'
 $sourceFiles = Get-ChildItem -LiteralPath (Join-Path $projectDirectory 'frontend/src') -Recurse -File
 $latestSource = ($sourceFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
 if (-not (Test-Path -LiteralPath $frontendEntry) -or $latestSource -gt (Get-Item -LiteralPath $frontendEntry).LastWriteTime) {
+    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if (-not $npmCommand) { throw 'Install Node.js 22 with npm and run this launcher again.' }
     Push-Location -LiteralPath (Join-Path $projectDirectory 'frontend')
     try {
-        & npm.cmd ci
+        & $npmCommand.Source ci
         if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed' }
-        & npm.cmd run build
+        & $npmCommand.Source run build
         if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
     } finally { Pop-Location }
 }
+if ($temporaryInvite) { Write-Host "Local registration invite for this run: $temporaryInvite" }
 & $projectPython -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8788
+exit $LASTEXITCODE
