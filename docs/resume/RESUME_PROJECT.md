@@ -116,7 +116,7 @@ FastAPI  API 层（52 路由）── 统一 CharacterService
 | MCP | 5 工具 + 1 资源 | `backend/app/mcp/server.py` |
 | 多模态 | 2 个 Function Tool（`generate_image` / `send_voice`）+ 2 张 durable job 表；单图 ≤20MB，PNG/JPEG/WebP | `backend/app/characters/image_tools.py`、`voice_generation.py` |
 | 角色规模 | 3 个角色 Agent，单请求 0~3 人参与 ≤8 条消息 / ≤12 次生成 | `docs/design/MEMORY_AGENTS_PLAN.md` |
-| 上下文预算 | 总 ≈9000 字符；近期原文 3500 / 扩展 5500；附加记忆 1800 / 3000（内部上限 14000） | `docs/design/EFFICIENCY.md` |
+| 上下文预算 | 默认输入 24576 token，按完整轮次批量压缩，冻结摘要与追加式历史同步维护 | `docs/design/EFFICIENCY.md` |
 | 调度输入 | 最近 ≤6 条公开消息（≤4200 字符）+ ≤600 字符话题起点 | 同上 |
 | 归档粒度 | 40~60 条原文 → 约 200 字摘要（带来源/参与者/时间窗/知情范围） | `docs/design/MEMORY_AGENTS_PLAN.md` |
 | 实时性 | SSE 增量事件，后台消息 5 秒内到达；30 秒兜底轮询 | `docs/design/REALTIME.md` |
@@ -139,7 +139,7 @@ FastAPI  API 层（52 路由）── 统一 CharacterService
 6. **失败重试会不会重复发言？**
    固定消息 ID + 请求 ID 幂等；回复任务有执行令牌 + 续租，旧进程写入被判为过期丢弃；会话忙碌走暂缓不计失败，只有真故障才指数退避。
 7. **长上下文怎么控？**
-   三档：近期原文（默认 4 轮，追问/跨窗口协调才 8 轮）、相关摘要与重要事实（带 active/completed/cancelled/superseded 状态，已替代事实退出召回）、按约 9000 字符软上限取舍——优先保当前输入、人物框架、当前事实与核实过的执行结果。
+   请求以角色规则和冻结摘要开头，同频道原文按时间追加。达到 token 警戒线后压缩最旧的完整轮次。当前事实、跨窗口证据和当前输入后置，最新明确更正优先于旧摘要。
 8. **成本怎么控？**
    能规则判的绝不调模型（时间推进、动作证据、插话分类、去重收尾都用规则）；只有角色真的获得发言机会才构建完整记忆上下文；辅助调用统一走当前故事的群聊模型配置；MCP 侧再加每日请求数 + Token 预算（预留-结算-回收）。
 9. **并发与多进程怎么办？**

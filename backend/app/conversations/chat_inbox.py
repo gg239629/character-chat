@@ -32,7 +32,7 @@ class Turn(storage.Base):
 def accept(body):
     from backend.app.core import context as execution_context, services
     from backend.app.conversations import chat_history
-    from backend.app.memory import memory_autosave
+    from backend.app.memory import memory_autosave, prompt_history
     user,cid=storage.scope.get();world=execution_context.chat_world.get()
     text=next((m.get('content','').strip() for m in reversed(body.messages) if m.get('role')=='user'),'')
     if not text or len(text)>100000:raise ValueError('请输入有效消息（不超过十万字）')
@@ -42,6 +42,8 @@ def accept(body):
         if existing:
             if existing.content!=text:raise ValueError('重复请求内容不一致')
             return {'id':identity,'status':existing.status}
+        prompt_history.check_request([{'role': 'user', 'content': text}], None,
+                                     services.models().load_config())
         chat_history.bootstrap()
         memory_autosave.flush(user,cid,force=True)
         from backend.app.conversations import message_service

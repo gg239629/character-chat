@@ -1,9 +1,10 @@
 """Deterministic context selection; source files and canonical history stay intact."""
+import json
 import re
 
 
 def needs_recall(text):
-    return bool(re.search(r'记得|以前|之前|上次|昨天|约定|约好|说好|答应|回忆|承诺|计划|改到|取消|群里|群聊|私聊|私信|转告|发个|发消息|收到|她说|他们|她们|大家|你们|为什么|怎么|告诉|小婉|小研|小柳',text)) or len(text)>100
+    return bool(re.search(r'记得|以前|之前|上次|昨天|约定|约好|说好|答应|回忆|承诺|计划|预约编号|改到|取消|群里|群聊|私聊|私信|转告|发个|发消息|收到|她说|他们|她们|大家|你们|为什么|怎么|告诉|小婉|小研|小柳',text)) or len(text)>100
 
 
 def brief_continuation(text):
@@ -133,3 +134,55 @@ def dialogue_window(messages):
         if len(starts)<2:break
         selected=selected[starts[1]:]
     return selected
+
+
+def message_tokens(message, count):
+    extra = {key: value for key, value in message.items() if key not in ('role', 'content')}
+    return 4 + count(message['content'] or '') + (
+        count(json.dumps(extra, ensure_ascii=False, separators=(',', ':'))) if extra else 0
+    )
+
+
+def rotation_index(history, count, budget):
+    """Start a new segment at a user turn after crossing the token warning line."""
+    sizes = [message_tokens(message, count) for message in history]
+    total = sum(sizes)
+    if total <= budget * .90:
+        return 0
+    for index, message in enumerate(history):
+        if index and message['role'] == 'user' and total <= budget * .55:
+            return index
+        total -= sizes[index]
+    # A large recent turn may use most of the available history.
+    return next((i for i in range(len(history) - 1, 0, -1) if history[i]['role'] == 'user'), 0)
+
+
+def retained_history_start(history, count, remaining):
+    # This hard-limit fallback also handles a single large historical turn.
+    # Cut whole old turns, keeping the same order for every retained message.
+    history_size = sum(message_tokens(m, count) for m in history)
+    start = 0
+    while history_size > remaining and start < len(history):
+        end = next((i for i in range(start + 1, len(history)) if history[i]['role'] == 'user'), len(history))
+        history_size -= sum(message_tokens(m, count) for m in history[start:end])
+        start = end
+    return start, history_size
+
+
+def token_payload(prefix, history, tail, current, count, limit, *, required=()):
+    """Preserve an append-only transcript and budget the entire input."""
+    if isinstance(current, dict):
+        current = [current]
+    required = list(required)
+    remaining = limit - sum(message_tokens(m, count) for m in [*prefix, *required, *current])
+    if remaining < 0:
+        raise ValueError('当前消息和必需的上下文超过模型输入预算，请缩短消息或调整上下文设置。')
+    start, history_size = retained_history_start(history, count, remaining)
+    remaining -= history_size
+    kept_tail = []
+    for message in tail:
+        size = message_tokens(message, count)
+        if size <= remaining:
+            kept_tail.append(message)
+            remaining -= size
+    return [*prefix, *history[start:], *required, *kept_tail, *current]

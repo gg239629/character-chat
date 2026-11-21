@@ -69,6 +69,7 @@ async def reply(cfg,payload,calls,result):
     """Let the same role continue naturally after receiving the real tool result."""
     from backend.app.core import services
     from backend.app.infrastructure import model_usage
+    from backend.app.memory import prompt_history
     tool_calls=[{'id':call.get('id') or 'image_call_'+str(index),'type':'function',
         'function':{'name':call['name'],'arguments':call['arguments']}} for index,call in calls.items()]
     messages=[*payload,{'role':'assistant','content':None,'tool_calls':tool_calls}]
@@ -77,6 +78,7 @@ async def reply(cfg,payload,calls,result):
         '根据工具真实结果继续回应最新用户，保持本人的性格、说话方式和当前情境。简短自然，可以带动作或情绪。'
         '不要复述提示词或画面描述，不提工具、任务、排队、模型、系统等实现细节，不用“正在生成图片，完成后会发到这里”这类客服播报。'
         'pending/running 只表示图片尚未完成，不要说照片已发送或已到达；done 才是图片已就绪；失败时自然说明这次没能提供照片。'})
+    prompt_history.check_request(messages, None, cfg, output_tokens=400)
     client=services.models().make_client(cfg)
     try:
         response=await model_usage.complete(client,cfg,messages,'character',temperature=cfg.get('temperature',1),max_tokens=400)
@@ -97,9 +99,11 @@ async def repair(cfg,payload,raw):
     """One bounded retry through real tools; prose markers never directly spend money."""
     from backend.app.core import services
     from backend.app.infrastructure import model_usage
+    from backend.app.memory import prompt_history
     messages=[*payload,{'role':'assistant','content':raw},{'role':'system','content':
         '上一条输出包含无效的内部图片标记，未实际创建图片。重新处理最新用户请求：确实要图片才调用 generate_image；'
         '能力询问、否定等仅正常回答，不调用工具。只用真实工具调用，禁止在正文写标记和提示词。'}]
+    prompt_history.check_request(messages, [TOOL], cfg, output_tokens=1200)
     client=services.models().make_client(cfg)
     try:
         response=await model_usage.complete(client,cfg,messages,'character',tools=[TOOL],tool_choice='auto',max_tokens=1200)

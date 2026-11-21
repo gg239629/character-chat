@@ -46,6 +46,20 @@ class InboxTests(unittest.TestCase):
                 with Session(self.store.engine) as db:self.assertEqual(len(list(db.scalars(select(chat_history.Message)))),2)
             finally:chat_history.release('already-generating')
 
+    def test_send_rejects_oversized_input_before_writing_a_turn(self):
+        from backend.app.memory import prompt_history
+        with (
+            patch.dict('os.environ', {'CHAT_CONTEXT_INPUT_TOKENS': '3000'}),
+            patch.object(prompt_history, 'counter', return_value=len),
+            TestClient(server.app) as client,
+        ):
+            response = client.post('/api/send', json={
+                'request_id': 'oversized', 'messages': [{'role': 'user', 'content': '长' * 3100}],
+            })
+        self.assertEqual(response.status_code, 422)
+        self.assertIn('缩短', response.json()['error'])
+        self.assertEqual(chat_history.messages(), [])
+
     def test_newest_turn_sees_all_messages_and_older_pending_is_superseded(self):
         captured=[]
         async def create(**kwargs):

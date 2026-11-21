@@ -70,6 +70,51 @@ class EfficiencyTests(unittest.TestCase):
                                       recall_budget=1200, semantic=False)
         self.assertEqual([event['id'] for event in memory['recall']], ['updated'])
 
+    def test_prompt_history_retrieves_old_current_channel_evidence_without_replaying_recent_records(self):
+        chat_history.append('old-booking', 0, 'user', '植物园预约编号 Q7M9')
+        chat_history.append('recent-note', 0, 'user', '后勤事项已经更新')
+        memory = role_memory.remember('owner', 'default', 'wan', '植物园预约编号', True,
+                                      recall_budget=1200, semantic=False, include_recent_current=False)
+        self.assertTrue(any('Q7M9' in event['text'] for event in memory['recall']))
+        self.assertFalse(any('后勤事项' in event['text'] for event in memory['events']))
+
+    def test_prompt_compaction_persists_once_and_keeps_canonical_messages(self):
+        from backend.app.memory import prompt_history
+        with role_actions.window('owner', 'default', 'wan') as channel:
+            for index in range(4):
+                chat_history.append(str(index), 0, 'user', f'{index}: ' + '记录' * 175)
+                chat_history.append(str(index), 1, 'assistant', '已记录', '小婉')
+            current = [{'role': 'user', 'content': '好'}]
+            system = [{'role': 'system', 'content': '固定人设'}]
+            with (
+                patch.dict('os.environ', {'CHAT_CONTEXT_INPUT_TOKENS': '3200'}),
+                patch.object(prompt_history, 'counter', return_value=len),
+                patch.object(prompt_history, '_summary', return_value='已确认的历史事实') as summary,
+            ):
+                first = prompt_history.prepare('owner', 'default', 'wan', False, current, system, {})
+                second = prompt_history.prepare('owner', 'default', 'wan', False, current, system, {})
+            state = self.store.read('owner', channel)['prompt_history']['wan']
+            self.assertEqual(state['summaries'], ['已确认的历史事实'])
+            self.assertEqual(first[:3], second[:3])
+            self.assertEqual(len(chat_history.messages()), 8)
+            summary.assert_called_once()
+
+    def test_oversized_active_turn_does_not_start_compaction(self):
+        from backend.app.memory import prompt_history
+        with (
+            role_actions.window('owner', 'default', 'wan'),
+            patch.dict('os.environ', {'CHAT_CONTEXT_INPUT_TOKENS': '3200'}),
+            patch.object(prompt_history, 'counter', return_value=len),
+            patch.object(prompt_history, '_summary', side_effect=AssertionError('unexpected summary call')),
+        ):
+            for index in range(4):
+                chat_history.append(str(index), 0, 'user', f'{index}: ' + '记录' * 175)
+                chat_history.append(str(index), 1, 'assistant', '已记录', '小婉')
+            with self.assertRaises(ValueError):
+                prompt_history.prepare('owner', 'default', 'wan', False,
+                                       [{'role': 'user', 'content': '字' * 3000}],
+                                       [{'role': 'system', 'content': '固定人设'}], {})
+
     def test_actor_prompt_deduplicates_current_transcript_and_strips_internal_ids(self):
         chat_history.bootstrap();chat_history.append('original',0,'user','非常独特的当前窗口消息')
         message=chat_history.messages()[-1]
@@ -125,7 +170,9 @@ class EfficiencyTests(unittest.TestCase):
         text = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn('周六出发', text)
         self.assertNotIn('紫色手套', text)
-        self.assertLessEqual(sum(len(m['content']) for m in payload), 9000)
+        from backend.app.memory import prompt_history
+        count = prompt_history.counter()
+        self.assertLessEqual(sum(4 + count(m['content']) for m in payload), 24576)
         self.assertTrue(any('植物园约定取消，周末不去了。' in m['content'] for m in generic_recall))
 
     def test_direct_question_routes_without_coordinator_model_and_actor_still_decides(self):

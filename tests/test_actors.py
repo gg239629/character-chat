@@ -307,7 +307,8 @@ class ActorTests(unittest.TestCase):
             with actors.role_scope('owner','default',role):
                 storage.append_log([{'who':'他','text':'only-secret-'+role}])
         _,payload=self._payload('wan',[{'role':'user','content':'你怎么不说话了'}])
-        timeline='\n'.join(m['content'] for m in payload if m['role']!='system')
+        timeline=next(m['content'] for m in payload if m['content'].startswith('本轮跨窗口时间线'))
+        self.assertIn('未经授权不得在群聊公开',timeline)
         self.assertLess(timeline.index('去群里发个1'),timeline.index('小婉：1'))
         self.assertLess(timeline.index('小婉：1'),timeline.index('发1干嘛'))
         self.assertNotIn('only-secret-yan',json.dumps(payload,ensure_ascii=False))
